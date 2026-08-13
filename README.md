@@ -5,7 +5,7 @@
 ![Linux](https://img.shields.io/badge/Linux-PipeWire-green)
 ![Status](https://img.shields.io/badge/status-experimental-yellow)
 
-# puffy
+# Puffy
 
 Experimental cross-platform soundboard and microphone mixer written in C++20.
 
@@ -23,7 +23,7 @@ It plays sounds locally, mixes them with a physical microphone, and sends the re
 > backend contracts exist, but their system virtual microphone drivers are not
 > included yet.
 
-## What is puffy?
+## What is Puffy?
 
 puffy is an open-source Soundpad-like soundboard for people who want to route:
 
@@ -51,7 +51,7 @@ That means you can send an airhorn to Discord without hearing the airhorn in you
 - C++20 core with CMake.
 - Qt 6/QML desktop interface.
 - SQLite sound library, profiles and playlists.
-- WAV, FLAC, OGG and other formats supported by the installed `libsndfile` build.
+- WAV, MP3, FLAC, OGG and other formats supported by the installed `libsndfile` build.
 - Decoded audio cache with memory limit and eviction.
 - Simultaneous sound voices.
 - Sound routing: headphones, virtual microphone, both.
@@ -124,6 +124,23 @@ The audio callback must not perform:
 If the callback starts allocating memory, the gremlins win.
 
 ## Build
+
+### Web desktop UI
+
+The modern renderer is under [`ui/web`](ui/web). It is a React + TypeScript + Vite
+frontend with a native bridge boundary; realtime audio remains in the C++ engine.
+
+```bash
+cd ui/web
+npm install
+npm run dev
+```
+
+The current renderer includes the production information architecture and a safe
+native Tauri/C++ IPC integration. In desktop mode the UI hydrates from the native
+SQLite library and sends playback, import, volume, and microphone commands through
+the bridge contract. The browser fallback remains available for visual development.
+documented in [`docs/WEB_UI_ARCHITECTURE.md`](docs/WEB_UI_ARCHITECTURE.md).
 
 ### Core and tests
 

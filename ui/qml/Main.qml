@@ -1,307 +1,233 @@
-import QtQuick
-import QtQuick.Controls
-import QtQuick.Layouts
-import QtQuick.Dialogs
+import QtQuick 6.5
+import QtQuick.Controls 6.5
+import QtQuick.Layouts 6.5
+import QtQuick.Dialogs 6.5
 
 ApplicationWindow {
     id: window
     visible: true
-    width: 1180
-    height: 760
-    minimumWidth: 900
-    minimumHeight: 600
+    width: 1280
+    height: 800
+    minimumWidth: 980
+    minimumHeight: 640
     title: "puffy — soundboard"
 
-    property color pageColor: "#fff8f5"
-    property color panelColor: "#ffffff"
-    property color accentColor: "#d98ca4"
-    property color accentSoftColor: "#f4dbe4"
-    property color textColor: "#453b49"
+    property int selectedPage: 0
+    property int activeSound: -1
+    property color backgroundColor: "#121214"
+    property color sidebarColor: "#0d0d0f"
+    property color surfaceColor: "#1b1b1f"
+    property color surfaceHover: "#27272d"
+    property color textColor: "#f5f2f6"
+    property color mutedColor: "#a19da8"
+    property color accentColor: "#ee82a9"
+    property color accentSoftColor: "#39232f"
 
-    color: pageColor
+    color: backgroundColor
+    palette.window: backgroundColor
+    palette.windowText: textColor
+    palette.button: surfaceColor
+    palette.buttonText: textColor
+    palette.highlight: accentColor
+    palette.highlightedText: "#ffffff"
 
     function toggleColor() {
-        accentColor = accentColor === "#d98ca4" ? "#8fa7d8" : "#d98ca4"
-        accentSoftColor = accentColor === "#d98ca4" ? "#f4dbe4" : "#dfe7f8"
-    }
-
-    function keyName(key) {
-        if (key >= Qt.Key_F1 && key <= Qt.Key_F12) return "F" + (key - Qt.Key_F1 + 1)
-        if (key >= Qt.Key_A && key <= Qt.Key_Z) return String.fromCharCode(65 + key - Qt.Key_A)
-        if (key >= Qt.Key_0 && key <= Qt.Key_9) return String.fromCharCode(48 + key - Qt.Key_0)
-        if (key === Qt.Key_Space) return "SPACE"
-        if (key === Qt.Key_Escape) return "ESCAPE"
-        if (key === Qt.Key_Tab) return "TAB"
-        if (key === Qt.Key_Return || key === Qt.Key_Enter) return "RETURN"
-        return ""
+        accentColor = accentColor === "#ee82a9" ? "#8db4ff" : "#ee82a9"
+        accentSoftColor = accentColor === "#ee82a9" ? "#39232f" : "#202e49"
     }
 
     FileDialog {
         id: addSoundDialog
         title: "Add sounds to puffy"
         fileMode: FileDialog.OpenFiles
-        nameFilters: ["Audio files (*.wav *.WAV *.flac *.ogg *.oga *.aiff *.au)", "All files (*)"]
+        nameFilters: ["Audio files (*.wav *.WAV *.mp3 *.MP3 *.flac *.ogg *.oga *.aiff *.au)", "All files (*)"]
         onAccepted: soundModel.addSounds(selectedFiles.map(function(url) { return url.toString().replace("file://", "") }))
     }
-    FileDialog {
-        id: exportProfileDialog
-        title: "Export puffy profile"
-        fileMode: FileDialog.SaveFile
-        nameFilters: ["puffy profile (*.json)", "All files (*)"]
-        onAccepted: soundModel.exportProfile(selectedFile.toString().replace("file://", ""))
-    }
-    FileDialog {
-        id: importProfileDialog
-        title: "Import puffy profile"
-        fileMode: FileDialog.OpenFile
-        nameFilters: ["puffy profile (*.json)", "All files (*)"]
-        onAccepted: soundModel.importProfile(selectedFile.toString().replace("file://", ""))
-    }
+    FileDialog { id: exportProfileDialog; title: "Export puffy profile"; fileMode: FileDialog.SaveFile; onAccepted: soundModel.exportProfile(selectedFile.toString().replace("file://", "")) }
+    FileDialog { id: importProfileDialog; title: "Import puffy profile"; fileMode: FileDialog.OpenFile; onAccepted: soundModel.importProfile(selectedFile.toString().replace("file://", "")) }
 
-    ColumnLayout {
+    RowLayout {
         anchors.fill: parent
-        anchors.margins: 24
-        spacing: 18
+        spacing: 0
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 14
+        Rectangle {
+            Layout.fillHeight: true
+            Layout.preferredWidth: 228
+            color: window.sidebarColor
 
             ColumnLayout {
-                Layout.fillWidth: true
-                spacing: 2
-                Label { text: "puffy"; font.pixelSize: 32; font.bold: true; color: window.textColor }
-                Label { text: "your tiny cloud of sounds"; color: "#8c7f8d"; font.pixelSize: 14 }
+                anchors.fill: parent
+                anchors.margins: 22
+                spacing: 0
+                Label { text: "puffy"; color: window.textColor; font.pixelSize: 30; font.bold: true }
+                Label { text: "your tiny cloud of sounds"; color: window.mutedColor; font.pixelSize: 11; Layout.topMargin: 2 }
+                Item { Layout.preferredHeight: 34 }
+                Label { text: "LIBRARY"; color: "#6f6b75"; font.pixelSize: 10; font.bold: true; Layout.leftMargin: 10; Layout.bottomMargin: 10 }
+                Repeater {
+                    model: ["Soundboard", "Library", "Playlists", "Microphone", "Effects", "Hotkeys", "Settings"]
+                    delegate: Button {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 42
+                        text: modelData
+                        flat: true
+                        leftPadding: 12
+                        onClicked: window.selectedPage = index
+                        background: Rectangle { radius: 10; color: window.selectedPage === index ? window.accentSoftColor : "transparent" }
+                        contentItem: RowLayout {
+                            spacing: 12
+                            Label { text: ["●", "▦", "≡", "♩", "✦", "⌨", "⚙"][index]; color: window.selectedPage === index ? window.accentColor : window.mutedColor; font.pixelSize: 16 }
+                            Label { text: parent.parent.text; color: window.selectedPage === index ? window.textColor : window.mutedColor; font.pixelSize: 13; Layout.fillWidth: true }
+                        }
+                    }
+                }
+                Item { Layout.fillHeight: true }
+                Rectangle { Layout.fillWidth: true; height: 1; color: "#25252a"; Layout.bottomMargin: 16 }
+                Label { text: "AUDIO ENGINE"; color: "#6f6b75"; font.pixelSize: 10; font.bold: true; Layout.leftMargin: 10 }
+                Label { text: "●  " + soundModel.audioState.toUpperCase(); color: soundModel.audioState === "Running" ? "#72d6a1" : "#e2aa68"; font.bold: true; Layout.topMargin: 8; Layout.leftMargin: 10 }
+                Label { text: "48 kHz  ·  " + soundModel.bufferFrames + " frames"; color: window.mutedColor; font.pixelSize: 11; Layout.topMargin: 4; Layout.leftMargin: 10 }
+                Label { text: "Estimated latency  " + soundModel.estimatedLatencyMs.toFixed(1) + " ms"; color: window.mutedColor; font.pixelSize: 11; Layout.topMargin: 3; Layout.leftMargin: 10 }
             }
-
-            Button {
-                text: "Change palette"
-                onClicked: window.toggleColor()
-                background: Rectangle { radius: 14; color: window.accentSoftColor }
-                contentItem: Label { text: parent.text; color: window.textColor; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-            }
-            Label {
-                text: "●  " + soundModel.audioState.toUpper()
-                color: soundModel.audioState === "Running" ? "#71a58d" : (soundModel.audioState === "Degraded" ? "#c79755" : "#b65b67")
-                font.bold: true
-            }
-            ComboBox { model: soundModel.profileNames; currentIndex: soundModel.currentProfile; onActivated: soundModel.currentProfile = currentIndex }
-            Button { text: "Export"; flat: true; onClicked: exportProfileDialog.open() }
-            Button { text: "Import"; flat: true; onClicked: importProfileDialog.open() }
         }
 
-        RowLayout {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 18
+            spacing: 0
 
             Rectangle {
-                Layout.preferredWidth: 210
-                Layout.fillHeight: true
-                radius: 22
-                color: window.panelColor
-                border.color: "#f0e5e8"
-
-                ColumnLayout {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                color: window.backgroundColor
+                RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 14
-                    spacing: 8
-                    Label { text: "WORKSPACE"; color: "#aa9ba8"; font.pixelSize: 11; font.bold: true; Layout.leftMargin: 8 }
-                    Repeater {
-                        model: ["Soundboard", "Library", "Playlists", "Microphone", "Effects", "Hotkeys", "Settings"]
-                        delegate: Button {
-                            Layout.fillWidth: true
-                            text: modelData
-                            flat: true
-                            leftPadding: 14
-                            horizontalAlignment: Text.AlignLeft
-                            background: Rectangle { radius: 12; color: index === 0 ? window.accentSoftColor : "transparent" }
-                            contentItem: Label { text: parent.text; color: window.textColor; verticalAlignment: Text.AlignVCenter }
-                        }
-                    }
-                    Item { Layout.fillHeight: true }
-                        Label { text: "48 kHz  •  128 frames"; color: "#9e919c"; font.pixelSize: 11; Layout.leftMargin: 8 }
-                    Label { text: soundModel.bufferFrames + " frames  •  estimated latency " + soundModel.estimatedLatencyMs.toFixed(1) + " ms"; color: "#9e919c"; font.pixelSize: 11; Layout.leftMargin: 8 }
+                    anchors.leftMargin: 34
+                    anchors.rightMargin: 34
+                    spacing: 16
+                    Label { text: ["Soundboard", "Library", "Playlists", "Microphone", "Effects", "Hotkeys", "Settings"][window.selectedPage]; color: window.textColor; font.pixelSize: 20; font.bold: true; Layout.fillWidth: true }
+                    Button { text: "Palette"; flat: true; onClicked: window.toggleColor() }
+                    ComboBox { model: soundModel.profileNames; currentIndex: soundModel.currentProfile; onActivated: soundModel.currentProfile = currentIndex; Layout.preferredWidth: 120 }
+                    Button { text: "Export"; flat: true; onClicked: exportProfileDialog.open() }
+                    Button { text: "Import"; flat: true; onClicked: importProfileDialog.open() }
                 }
             }
 
-            ColumnLayout {
+            Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                spacing: 16
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 82
-                    radius: 20
-                    color: window.accentSoftColor
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 18; spacing: 14
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "FULL KEYBOARD MODE"; color: window.textColor; font.bold: true; font.pixelSize: 16 }; Label { text: "Every allowed key can trigger a sound"; color: "#806f7d" } }
-                        Switch { checked: soundModel.fullKeyboardEnabled; text: checked ? "ON" : "OFF"; onToggled: soundModel.fullKeyboardEnabled = checked }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 104
-                    radius: 18
-                    color: "#fffefd"
-                    border.color: "#f0e5e8"
+                color: window.backgroundColor
+                visible: window.selectedPage === 0
+                Flickable {
+                    anchors.fill: parent
+                    anchors.leftMargin: 34
+                    anchors.rightMargin: 34
+                    anchors.bottomMargin: 84
+                    contentWidth: width
+                    contentHeight: contentColumn.height
+                    clip: true
                     ColumnLayout {
-                        anchors.fill: parent; anchors.margins: 14; spacing: 8
-                        RowLayout {
+                        id: contentColumn
+                        width: parent.width
+                        spacing: 24
+                        Rectangle {
                             Layout.fillWidth: true
-                            Label { text: "Mode"; color: window.textColor; font.bold: true; Layout.fillWidth: true }
-                            ComboBox { model: ["Random", "Playlist / sequential", "Single sound"]; currentIndex: soundModel.fullKeyboardMode; onActivated: soundModel.fullKeyboardMode = currentIndex }
-                            ComboBox { visible: soundModel.fullKeyboardMode === 1; model: playlistModel; textRole: "name"; currentIndex: playlistModel.currentPlaylist; onActivated: playlistModel.currentPlaylist = currentIndex }
-                            ComboBox { visible: soundModel.fullKeyboardMode === 2; model: soundModel; textRole: "name"; onActivated: soundModel.fullKeyboardSingleSound = soundModel.soundIdAt(currentIndex) }
-                            CheckBox { text: "Avoid repeats"; checked: soundModel.avoidImmediateRepeats; onToggled: soundModel.avoidImmediateRepeats = checked }
-                            CheckBox { text: "OS repeat"; checked: soundModel.triggerOnRepeat; onToggled: soundModel.triggerOnRepeat = checked }
+                            Layout.preferredHeight: 150
+                            radius: 18
+                            color: window.accentSoftColor
+                            RowLayout {
+                                anchors.fill: parent; anchors.margins: 24; spacing: 20
+                                ColumnLayout { Layout.fillWidth: true; Label { text: "Make some noise."; color: window.textColor; font.pixelSize: 30; font.bold: true } Label { text: "Your soundboard, finally dressed for the occasion."; color: window.mutedColor; font.pixelSize: 14 } }
+                                ColumnLayout { Layout.preferredWidth: 220; Label { text: "FULL KEYBOARD"; color: window.mutedColor; font.pixelSize: 10; font.bold: true } Switch { checked: soundModel.fullKeyboardEnabled; text: checked ? "Enabled" : "Disabled"; onToggled: soundModel.fullKeyboardEnabled = checked } }
+                            }
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Label { text: "Ignore in full mode:"; color: "#806f7d"; Layout.fillWidth: true }
-                            CheckBox { text: "Ctrl"; checked: soundModel.ignoreCtrl; onToggled: soundModel.ignoreCtrl = checked }
-                            CheckBox { text: "Shift"; checked: soundModel.ignoreShift; onToggled: soundModel.ignoreShift = checked }
-                            CheckBox { text: "Alt"; checked: soundModel.ignoreAlt; onToggled: soundModel.ignoreAlt = checked }
-                            CheckBox { text: "Super"; checked: soundModel.ignoreSuper; onToggled: soundModel.ignoreSuper = checked }
+                            Label { text: "Your sounds"; color: window.textColor; font.pixelSize: 22; font.bold: true; Layout.fillWidth: true }
+                            Label { text: soundModel.count + " sounds"; color: window.mutedColor }
+                    Label { text: "Master"; color: window.mutedColor; font.pixelSize: 12 }
+                    Slider { from: 0; to: 2; value: soundModel.soundboardGain; onMoved: soundModel.soundboardGain = value; Layout.preferredWidth: 130 }
+                    Label { text: Math.round(soundModel.soundboardGain * 100) + "%"; color: window.mutedColor; font.pixelSize: 12 }
+                    Button { text: "+ Add sound"; onClicked: addSoundDialog.open(); highlighted: true }
                         }
-                        Label { text: "Source: entire sound library  •  all options are off by default"; color: "#9e919c"; font.pixelSize: 12 }
-                        RowLayout {
+                        Rectangle { visible: soundModel.lastError.length > 0; Layout.fillWidth: true; Layout.preferredHeight: 38; radius: 8; color: "#4a202b"; Label { anchors.fill: parent; anchors.margins: 12; text: soundModel.lastError; color: "#ffb4c5"; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter } }
+                        GridLayout {
                             Layout.fillWidth: true
-                            Label { text: "Ignore keycodes:"; color: "#806f7d" }
-                            TextField { Layout.fillWidth: true; text: soundModel.ignoredKeyCodes; placeholderText: "e.g. 9, 65, 108"; onEditingFinished: soundModel.ignoredKeyCodes = text }
-                        }
-                    }
-                }
-
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 86
-                    radius: 18
-                    color: "#fffefd"
-                    border.color: "#f0e5e8"
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 14; spacing: 16
-                        Label { text: "Microphone effects"; color: window.textColor; font.bold: true; Layout.preferredWidth: 150 }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "Gain  " + Math.round(soundModel.microphoneGain * 100) + "%"; color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 0; to: 4; value: soundModel.microphoneGain; onMoved: soundModel.microphoneGain = value } }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "Gate  " + soundModel.gateThreshold.toFixed(3); color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 0; to: 0.2; value: soundModel.gateThreshold; onMoved: soundModel.gateThreshold = value } }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "Limiter  " + Math.round(soundModel.limiterCeiling * 100) + "%"; color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 0.5; to: 1; value: soundModel.limiterCeiling; onMoved: soundModel.limiterCeiling = value } }
-                    }
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 14; spacing: 16
-                        Label { text: "Voice shaping"; color: window.textColor; font.bold: true; Layout.preferredWidth: 150 }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "Comp ratio  " + soundModel.compressorRatio.toFixed(1); color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 1; to: 20; value: soundModel.compressorRatio; onMoved: soundModel.compressorRatio = value } }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "Low-pass  " + Math.round(soundModel.lowPassCutoff) + " Hz"; color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 1000; to: 20000; value: soundModel.lowPassCutoff; onMoved: soundModel.lowPassCutoff = value } }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "High-pass  " + Math.round(soundModel.highPassCutoff) + " Hz"; color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 20; to: 1000; value: soundModel.highPassCutoff; onMoved: soundModel.highPassCutoff = value } }
-                        ColumnLayout { Layout.fillWidth: true; Label { text: "Delay  " + Math.round(soundModel.delayMix * 100) + "%"; color: "#806f7d" }; Slider { Layout.fillWidth: true; from: 0; to: 1; value: soundModel.delayMix; onMoved: soundModel.delayMix = value } }
-                    }
-                }
-
-                RowLayout {
-                    Layout.fillWidth: true
-                    Label { text: "My sounds"; color: window.textColor; font.pixelSize: 22; font.bold: true; Layout.fillWidth: true }
-                    Button { text: "+ Add sound"; onClicked: addSoundDialog.open(); background: Rectangle { radius: 14; color: window.accentColor }; contentItem: Label { text: parent.text; color: "white"; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter } }
-                }
-
-                Rectangle {
-                    visible: soundModel.lastError.length > 0
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 42
-                    radius: 12
-                    color: "#fde4e4"
-                    Label { anchors.fill: parent; anchors.margins: 12; text: soundModel.lastError; color: "#a34f5b"; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
-                }
-
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 3
-                    rowSpacing: 14
-                    columnSpacing: 14
-                    Repeater {
-                        model: soundModel
-                        delegate: Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 140
-                            radius: 20
-                            color: window.panelColor
-                            border.color: "#f0e5e8"
-                            ColumnLayout {
-                                anchors.fill: parent; anchors.margins: 16; spacing: 6
-                                Label { text: name; color: window.textColor; font.bold: true; font.pixelSize: 17; Layout.fillWidth: true }
-                                RowLayout {
+                            columns: width > 850 ? 3 : 2
+                            rowSpacing: 14; columnSpacing: 14
+                            Repeater {
+                                model: soundModel
+                                delegate: Rectangle {
                                     Layout.fillWidth: true
-                                    TextField { Layout.fillWidth: true; text: name; onEditingFinished: soundModel.renameSound(index, text); background: Rectangle { radius: 8; color: "#fff8f5"; border.color: "#f0e5e8" } }
-                                    Button { text: "×"; flat: true; onClicked: soundModel.removeSound(index) }
-                                }
-                                Label { text: duration > 0 ? duration.toFixed(1) + " sec" : "duration unknown"; color: "#9e919c"; Layout.fillWidth: true }
-                                TextField {
-                                    id: hotkeyField
-                                    property bool recording: false
-                                    Layout.fillWidth: true
-                                    text: hotkey
-                                    placeholderText: "Hotkey, e.g. CTRL+65"
-                                    selectByMouse: true
-                                    onEditingFinished: soundModel.assignHotkey(index, text)
-                                    Keys.onPressed: function(event) {
-                                        if (!recording) return
-                                        var name = window.keyName(event.key)
-                                        if (name.length === 0) return
-                                        var modifiers = []
-                                        if (event.modifiers & Qt.ControlModifier) modifiers.push("CTRL")
-                                        if (event.modifiers & Qt.ShiftModifier) modifiers.push("SHIFT")
-                                        if (event.modifiers & Qt.AltModifier) modifiers.push("ALT")
-                                        if (event.modifiers & Qt.MetaModifier) modifiers.push("SUPER")
-                                        modifiers.push(name)
-                                        text = modifiers.join("+")
-                                        recording = false
-                                        soundModel.assignHotkey(index, text)
-                                        event.accepted = true
+                                    Layout.preferredHeight: 146
+                                    radius: 14
+                                    color: mouse.containsMouse ? window.surfaceHover : window.surfaceColor
+                                    property bool playing: window.activeSound === index
+                                    ColumnLayout {
+                                        anchors.fill: parent; anchors.margins: 16; spacing: 8
+                                        RowLayout { Layout.fillWidth: true; Label { text: name; color: window.textColor; font.pixelSize: 15; font.bold: true; elide: Text.ElideRight; Layout.fillWidth: true } Label { text: favorite ? "♥" : ""; color: window.accentColor } }
+                                        Label { text: duration > 0 ? Math.floor(duration / 60) + ":" + (Math.floor(duration) % 60 < 10 ? "0" : "") + (Math.floor(duration) % 60) : "Audio file"; color: window.mutedColor; font.pixelSize: 12 }
+                                        Rectangle { Layout.fillWidth: true; height: 28; radius: 6; color: "#24242a"; Row { anchors.fill: parent; anchors.margins: 7; spacing: 4; Repeater { model: 28; delegate: Rectangle { width: 3; height: 5 + ((index * 17 + modelData * 11) % 15); radius: 2; color: window.accentColor; anchors.verticalCenter: parent.verticalCenter } } } }
+                                        RowLayout { Layout.fillWidth: true; Button { text: playing ? "■" : "▶"; highlighted: true; onClicked: { window.activeSound = index; soundModel.trigger(index) } } Label { text: hotkey.length > 0 ? hotkey : "No hotkey"; color: window.mutedColor; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight } Label { text: Math.round(volume * 100) + "%"; color: window.mutedColor; font.pixelSize: 11 } Button { text: "⋯"; flat: true; onClicked: soundModel.setFavorite(index, !favorite) } }
+                                        RowLayout { Layout.fillWidth: true; Label { text: "Volume"; color: window.mutedColor; font.pixelSize: 10 } Slider { Layout.fillWidth: true; from: 0; to: 2; value: volume; onMoved: soundModel.setSoundVolume(index, value) } }
                                     }
-                                    background: Rectangle { radius: 8; color: soundModel.hasHotkeyConflict(index, hotkeyField.text) ? "#fff0f0" : "#fff8f5"; border.color: soundModel.hasHotkeyConflict(index, hotkeyField.text) ? "#df8894" : "#f0e5e8" }
+                                    MouseArea { id: mouse; anchors.fill: parent; hoverEnabled: true; z: -1 }
                                 }
-                                Button { text: hotkeyField.recording ? "Press key…" : "Record"; onClicked: { hotkeyField.recording = true; hotkeyField.forceActiveFocus() }; flat: true }
-                                Label { visible: soundModel.hasHotkeyConflict(index, hotkeyField.text); text: "Hotkey already used"; color: "#b65b67"; font.pixelSize: 11 }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Label { text: "Volume"; color: "#9e919c"; font.pixelSize: 11 }
-                                    Slider { Layout.fillWidth: true; from: 0; to: 2; value: volume; onMoved: soundModel.setSoundVolume(index, value) }
-                                    ComboBox { model: ["None", "Headphones", "Virtual mic", "Both"]; currentIndex: route; onActivated: soundModel.setSoundRoute(index, currentIndex) }
-                                    CheckBox { text: "Loop"; checked: loop; onToggled: soundModel.setSoundLoop(index, checked) }
-                                }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Label { text: "Speed"; color: "#9e919c"; font.pixelSize: 11 }
-                                    Slider { Layout.fillWidth: true; from: 0.25; to: 3; value: speed; onMoved: soundModel.setSoundSpeed(index, value) }
-                                    Label { text: speed.toFixed(2) + "x"; color: window.accentColor; font.pixelSize: 11 }
-                                }
-                                RowLayout {
-                                    Layout.fillWidth: true
-                                    Label { text: "Fade"; color: "#9e919c"; font.pixelSize: 11 }
-                                    Slider { Layout.fillWidth: true; from: 0; to: 2; value: fadeIn; onMoved: soundModel.setSoundFades(index, value, fadeOut) }
-                                    Slider { Layout.fillWidth: true; from: 0; to: 2; value: fadeOut; onMoved: soundModel.setSoundFades(index, fadeIn, value) }
-                                }
-                                Item { Layout.fillHeight: true }
-                                RowLayout { Layout.fillWidth: true; Label { text: hotkey.length > 0 ? hotkey : "—"; color: window.accentColor; font.bold: true; Layout.fillWidth: true }; Button { text: "▶"; flat: true; onClicked: soundModel.trigger(index); contentItem: Label { text: parent.text; color: window.accentColor; font.pixelSize: 18 } } }
                             }
                         }
                     }
                 }
-                Rectangle {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 68
-                    radius: 18; color: "#fffefd"; border.color: "#f0e5e8"
-                    RowLayout {
-                        anchors.fill: parent; anchors.margins: 14
-                        Label { text: "Input"; color: "#806f7d" }
-                        ComboBox { Layout.fillWidth: true; model: deviceModel.inputNames; currentIndex: 0; onActivated: deviceModel.selectedInput = deviceModel.inputIdAt(currentIndex) }
-                        Label { text: "Output"; color: "#806f7d" }
-                        ComboBox { Layout.fillWidth: true; model: deviceModel.outputNames; currentIndex: 0; onActivated: deviceModel.selectedOutput = deviceModel.outputIdAt(currentIndex) }
-                        Button { text: "↻"; onClicked: deviceModel.refresh() }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: window.backgroundColor
+                visible: window.selectedPage === 2
+                RowLayout {
+                    anchors.fill: parent; anchors.margins: 34; spacing: 20
+                    Rectangle {
+                        Layout.preferredWidth: 270; Layout.fillHeight: true; radius: 16; color: window.surfaceColor
+                        ColumnLayout {
+                            anchors.fill: parent; anchors.margins: 16; spacing: 8
+                            Label { text: "Playlists"; color: window.textColor; font.pixelSize: 20; font.bold: true }
+                            RowLayout { Layout.fillWidth: true; TextField { id: newPlaylistName; Layout.fillWidth: true; placeholderText: "New playlist" } Button { text: "+"; highlighted: true; onClicked: { if (playlistModel.createPlaylist(newPlaylistName.text)) newPlaylistName.clear() } } }
+                            ListView {
+                                Layout.fillWidth: true; Layout.fillHeight: true; spacing: 4; clip: true; model: playlistModel
+                                delegate: Button { Layout.fillWidth: true; text: name; flat: true; highlighted: index === playlistModel.currentPlaylist; onClicked: playlistModel.currentPlaylist = index }
+                            }
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true; Layout.fillHeight: true; spacing: 18
+                        RowLayout { Layout.fillWidth: true; Label { text: playlistModel.currentPlaylist >= 0 ? "Playlist sounds" : "Choose a playlist"; color: window.textColor; font.pixelSize: 26; font.bold: true; Layout.fillWidth: true } Button { text: "Delete playlist"; flat: true; enabled: playlistModel.currentPlaylist >= 0; onClicked: playlistModel.removePlaylist(playlistModel.currentPlaylist) } }
+                        Rectangle {
+                            Layout.fillWidth: true; Layout.preferredHeight: 46; radius: 10; color: window.surfaceColor
+                            Label { anchors.fill: parent; anchors.margins: 14; text: "Add sounds from your library below. Order follows the add sequence."; color: window.mutedColor; verticalAlignment: Text.AlignVCenter }
+                        }
+                        ListView {
+                            Layout.fillWidth: true; Layout.fillHeight: true; clip: true; spacing: 6; model: soundModel
+                            delegate: Rectangle {
+                                width: ListView.view.width; height: 54; radius: 10; color: window.surfaceColor
+                                RowLayout { anchors.fill: parent; anchors.margins: 12; Label { text: name; color: window.textColor; Layout.fillWidth: true } Label { text: duration > 0 ? duration.toFixed(1) + " s" : "audio"; color: window.mutedColor } Button { text: playlistModel.containsSound(soundId) ? "Remove" : "Add"; flat: true; enabled: playlistModel.currentPlaylist >= 0; onClicked: playlistModel.containsSound(soundId) ? playlistModel.removeSoundFromCurrent(soundId) : playlistModel.addSoundToCurrent(soundId) } }
+                            }
+                        }
                     }
                 }
-                Item { Layout.fillHeight: true }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                color: window.backgroundColor
+                visible: window.selectedPage !== 0 && window.selectedPage !== 2
+                ColumnLayout { anchors.centerIn: parent; spacing: 12; Label { text: ["Soundboard", "Library", "Playlists", "Microphone", "Effects", "Hotkeys", "Settings"][window.selectedPage]; color: window.textColor; font.pixelSize: 30; font.bold: true; Layout.alignment: Qt.AlignHCenter } Label { text: "This workspace is ready for the next cozy pass."; color: window.mutedColor; Layout.alignment: Qt.AlignHCenter } }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 76
+                color: "#18181b"
+                border.color: "#29292e"
+                RowLayout { anchors.fill: parent; anchors.leftMargin: 28; anchors.rightMargin: 28; spacing: 16; Label { text: window.activeSound >= 0 ? "Playing sound " + (window.activeSound + 1) : "Ready when you are"; color: window.textColor; font.bold: true; Layout.fillWidth: true } Label { text: "Monitoring: " + (soundModel.hearMicrophone ? "mic on" : "sounds only"); color: window.mutedColor } Button { text: "Stop all"; flat: true; onClicked: soundModel.stopAllSounds() } }
             }
         }
     }

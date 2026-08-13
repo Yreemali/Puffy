@@ -1,4 +1,4 @@
-# puffy — архитектура и feasibility analysis
+# Puffy — архитектура и feasibility analysis
 
 ## Решение
 
@@ -18,7 +18,7 @@
 * Qt 6.5+ и Qt Quick/QML для desktop UI.
 * Native audio: WASAPI (Windows), PipeWire (Linux), Core Audio (macOS).
 * SQLite 3 для metadata и профилей; JSON экспорт — Qt JSON либо vendored single-header библиотека с проверенной лицензией.
-* libsndfile для WAV/FLAC/OGG/AIFF/AU where supported; mpg123/minimp3 или FFmpeg-профиль для MP3/AAC/M4A/Opus после отдельной license review. Decode worker не вызывается из callback.
+* libsndfile для WAV/MP3/FLAC/OGG/AIFF/AU where supported; дополнительные AAC/M4A/Opus backends требуют отдельной license review. Decode worker не вызывается из callback.
 * Лицензия проекта: GPL-3.0-or-later. SQLite public domain; Qt LGPL 3 (использовать динамическую линковку и соблюдать LGPL); PipeWire MIT/LGPL-компоненты проверяются по используемым пакетам; Windows/macOS SDK — системные SDK с их условиями. Точные версии и notices фиксируются в `third_party/THIRD_PARTY_NOTICES.md` перед релизом.
 
 ## Слои

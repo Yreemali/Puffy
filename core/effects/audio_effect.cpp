@@ -10,10 +10,12 @@ void Gain::process(std::span<float> samples, std::size_t, int) noexcept {
 }
 
 void NoiseGate::process(std::span<float> samples, std::size_t frames, int channels) noexcept {
+    const auto threshold = threshold_.load(std::memory_order_relaxed);
+    const auto releaseSamples = releaseSamples_.load(std::memory_order_relaxed);
     for (std::size_t frame = 0; frame < frames; ++frame) {
         float peak = 0.0F;
         for (int channel = 0; channel < channels; ++channel) peak = std::max(peak, std::abs(samples[frame * static_cast<std::size_t>(channels) + channel]));
-        if (peak >= threshold_) remaining_ = releaseSamples_;
+        if (peak >= threshold) remaining_ = releaseSamples;
         const float multiplier = remaining_ > 0 ? 1.0F : 0.0F;
         for (int channel = 0; channel < channels; ++channel) samples[frame * static_cast<std::size_t>(channels) + channel] *= multiplier;
         if (remaining_ > 0) --remaining_;
@@ -21,10 +23,13 @@ void NoiseGate::process(std::span<float> samples, std::size_t frames, int channe
 }
 
 void Limiter::process(std::span<float> samples, std::size_t, int) noexcept {
-    for (auto& sample : samples) sample = std::clamp(sample, -ceiling_, ceiling_);
+    const auto ceiling = ceiling_.load(std::memory_order_relaxed);
+    for (auto& sample : samples) sample = std::clamp(sample, -ceiling, ceiling);
 }
 
 void Compressor::process(std::span<float> samples, std::size_t, int) noexcept {
+    const auto threshold = threshold_.load(std::memory_order_relaxed);
+    const auto ratio = ratio_.load(std::memory_order_relaxed);
     const auto attackCoefficient = std::exp(-1.0F / (sampleRate_ * std::max(attack_, 0.0001F)));
     const auto releaseCoefficient = std::exp(-1.0F / (sampleRate_ * std::max(release_, 0.0001F)));
     for (auto& sample : samples) {
@@ -32,8 +37,8 @@ void Compressor::process(std::span<float> samples, std::size_t, int) noexcept {
         const auto coefficient = magnitude > envelope_ ? attackCoefficient : releaseCoefficient;
         envelope_ = coefficient * envelope_ + (1.0F - coefficient) * magnitude;
         float gain = 1.0F;
-        if (envelope_ > threshold_) {
-            const auto compressed = threshold_ + (envelope_ - threshold_) / ratio_;
+        if (envelope_ > threshold) {
+            const auto compressed = threshold + (envelope_ - threshold) / ratio;
             gain = compressed / std::max(envelope_, 0.00001F);
         }
         sample *= gain;

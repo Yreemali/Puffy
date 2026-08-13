@@ -20,6 +20,12 @@ public:
     QHash<int, QByteArray> roleNames() const override;
     Q_INVOKABLE void refresh();
     Q_INVOKABLE bool createPlaylist(const QString& name);
+    Q_INVOKABLE bool renamePlaylist(int row, const QString& name);
+    Q_INVOKABLE bool removePlaylist(int row);
+    Q_INVOKABLE bool addSoundToCurrent(qint64 soundId);
+    Q_INVOKABLE bool removeSoundFromCurrent(qint64 soundId);
+    Q_INVOKABLE bool containsSound(qint64 soundId) const;
+    Q_INVOKABLE QVariantList currentSoundIds() const;
     Q_INVOKABLE bool setPlaylistSounds(int row, const QVariantList& ids);
     int currentPlaylist() const noexcept { return currentPlaylist_; }
     void setCurrentPlaylist(int row);

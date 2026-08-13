@@ -39,12 +39,18 @@ bool HotkeyRouter::start() {
 void HotkeyRouter::stop() noexcept { listener_.stop(); }
 
 bool HotkeyRouter::bindSound(Hotkey hotkey, std::int64_t soundId) {
-    return manager_.bind(hotkey, [this, soundId] {
-        service_.trigger(soundId, true);
+    return manager_.bindEvent(hotkey, [this, soundId](const KeyEvent& event) {
+        service_.trigger(soundId, event.pressed, event.repeat);
     });
 }
 
 bool HotkeyRouter::bindSoundText(std::string_view text, std::int64_t soundId) {
+    return bindActionText(text, [this, soundId](const KeyEvent& event) {
+        service_.trigger(soundId, event.pressed, event.repeat);
+    });
+}
+
+bool HotkeyRouter::bindActionText(std::string_view text, HotkeyManager::EventAction action) {
     Hotkey hotkey;
     std::size_t begin = 0;
     while (begin < text.size()) {
@@ -60,7 +66,7 @@ bool HotkeyRouter::bindSoundText(std::string_view text, std::int64_t soundId) {
         if (end == std::string_view::npos) break;
         begin = end + 1;
     }
-    return hotkey.keyCode != 0 && bindSound(hotkey, soundId);
+    return hotkey.keyCode != 0 && manager_.bindEvent(hotkey, std::move(action));
 }
 
 void HotkeyRouter::clearBindings() { manager_.clear(); }

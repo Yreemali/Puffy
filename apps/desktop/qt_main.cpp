@@ -1,4 +1,5 @@
-#include <QGuiApplication>
+#include <QApplication>
+#include <QQuickStyle>
 #include <QQmlContext>
 #include <QQmlApplicationEngine>
 #include <QStandardPaths>
@@ -27,7 +28,8 @@
 #endif
 
 int main(int argc, char* argv[]) {
-    QGuiApplication application(argc, argv);
+    QQuickStyle::setStyle("Material");
+    QApplication application(argc, argv);
     application.setApplicationName("puffy");
     application.setOrganizationName("puffy");
 
@@ -81,7 +83,8 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty("soundModel", &soundModel);
     engine.rootContext()->setContextProperty("deviceModel", &deviceModel);
     engine.rootContext()->setContextProperty("playlistModel", &playlistModel);
-    QSystemTrayIcon tray(QIcon::fromTheme("audio-input-microphone"));
+    const auto trayIcon = QIcon::fromTheme("audio-input-microphone", QIcon::fromTheme("audio-card"));
+    QSystemTrayIcon tray(trayIcon);
     QMenu trayMenu;
     trayMenu.addAction("Open", [&engine] { if (!engine.rootObjects().isEmpty()) engine.rootObjects().first()->setProperty("visible", true); });
     trayMenu.addAction("Stop All Sounds", [&soundModel] { soundModel.stopAllSounds(); });
@@ -91,7 +94,7 @@ int main(int argc, char* argv[]) {
     trayMenu.addSeparator();
     trayMenu.addAction("Exit", &application, &QGuiApplication::quit);
     tray.setContextMenu(&trayMenu);
-    tray.show();
+    if (!tray.icon().isNull()) tray.show();
     engine.load(QUrl(QStringLiteral("qrc:/ui/qml/Main.qml")));
     if (engine.rootObjects().isEmpty()) return 1;
     return application.exec();

@@ -81,7 +81,9 @@ bool PipeWireOutput::open(const std::string& deviceId, audio::AudioFormat format
     pw_thread_loop_lock(state_->threadLoop);
     auto* properties = pw_properties_new(PW_KEY_MEDIA_TYPE, "Audio",
                                          PW_KEY_MEDIA_CATEGORY, "Playback",
-                                         PW_KEY_MEDIA_ROLE, "Game", nullptr);
+                                         PW_KEY_MEDIA_ROLE, "Game",
+                                         PW_KEY_NODE_LATENCY, "128/48000",
+                                         PW_KEY_NODE_FORCE_QUANTUM, "128", nullptr);
     if (!deviceId.empty() && deviceId != "default") pw_properties_set(properties, PW_KEY_TARGET_OBJECT, deviceId.c_str());
     state_->stream = pw_stream_new_simple(pw_thread_loop_get_loop(state_->threadLoop), "puffy-monitoring", properties, &events, state_.get());
     std::uint8_t buffer[1024];
@@ -119,7 +121,13 @@ bool PipeWireOutput::write(std::span<const float> samples, std::size_t frames) n
     std::uint32_t writeIndex = 0;
     const auto used = spa_ringbuffer_get_write_index(&state_->ring, &writeIndex);
     const auto freeBytes = state_->ringStorage.size() - std::min<std::size_t>(state_->ringStorage.size(), used > 0 ? static_cast<std::size_t>(used) : 0U);
-    if (freeBytes < bytes) return false;
+    if (freeBytes < bytes) {
+        // Prefer the newest audio. Drop the oldest samples instead of
+        // accumulating stale sound and producing audible multi-second lag.
+        const auto newRead = writeIndex + static_cast<std::uint32_t>(bytes)
+            - static_cast<std::uint32_t>(state_->ringStorage.size());
+        spa_ringbuffer_read_update(&state_->ring, static_cast<std::int32_t>(newRead));
+    }
     spa_ringbuffer_write_data(&state_->ring, state_->ringStorage.data(), static_cast<std::uint32_t>(state_->ringStorage.size()),
                               writeIndex % static_cast<std::uint32_t>(state_->ringStorage.size()), samples.data(), static_cast<std::uint32_t>(bytes));
     spa_ringbuffer_write_update(&state_->ring, static_cast<std::int32_t>(writeIndex + bytes));

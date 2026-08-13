@@ -131,8 +131,11 @@ int main() {
     assert(engine.start(capture, output, &virtualMicrophone));
     std::vector<float> microphoneSamples{0.25F, 0.5F, 0.25F, 0.5F};
     capture.emit(microphoneSamples, 2, 2);
-    assert(output.lastFrames == 2 && output.last[0] == 0.25F);
+    assert(output.lastFrames == 2 && output.last[0] == 0.0F);
     assert(virtualMicrophone.receivedFrames == 2 && virtualMicrophone.received[1] == 0.5F);
+    engine.setMonitorMicrophone(true);
+    capture.emit(microphoneSamples, 2, 2);
+    assert(output.last[0] == 0.25F);
     engine.setMonitoringMuted(true);
     capture.emit(microphoneSamples, 2, 2);
     assert(output.last[0] == 0.25F);
@@ -150,7 +153,7 @@ int main() {
     assert(soundEngine.start(soundCapture, soundOutput, &soundVirtual));
     assert(soundEngine.playSound(99, audio::OutputRoute::VirtualMicrophone));
     soundCapture.emit(microphoneSamples, 2, 2);
-    assert(soundOutput.last[0] == 0.25F);
+    assert(soundOutput.last[0] == 0.0F);
     assert(soundVirtual.received[0] == 0.98F && soundVirtual.received[1] == 0.98F);
     assert(soundEngine.stopSound(99));
     soundEngine.stop();

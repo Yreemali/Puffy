@@ -16,6 +16,7 @@ struct MixerConfig {
     float monitoringGain{1.0F};
     float virtualOutputGain{1.0F};
     float masterCeiling{0.98F};
+    bool monitorMicrophone{false};
 };
 
 class Mixer final {
@@ -27,9 +28,11 @@ public:
     void stopSource(std::int64_t sourceId) noexcept;
     void setVoicesPaused(bool paused) noexcept { voicesPaused_ = paused; }
     void setMicrophoneGain(float gain) noexcept { config_.microphoneGain = gain; }
+    void setSoundboardGain(float gain) noexcept { config_.soundboardGain = gain; }
     void setMonitoringGain(float gain) noexcept { config_.monitoringGain = gain; }
     void setVirtualOutputGain(float gain) noexcept { config_.virtualOutputGain = gain; }
     void setMasterCeiling(float ceiling) noexcept { config_.masterCeiling = ceiling; }
+    void setMonitorMicrophone(bool enabled) noexcept { config_.monitorMicrophone = enabled; }
 
     // Mixes the current microphone block and active voices into preallocated outputs.
     // This function does not allocate or lock and is intended for the audio thread.

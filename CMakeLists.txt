@@ -32,7 +32,13 @@ add_library(puffy_core
 )
 target_include_directories(puffy_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_compile_features(puffy_core PUBLIC cxx_std_20)
+set_target_properties(puffy_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(puffy_core PUBLIC SQLite3::SQLite3)
+
+add_library(puffy_native SHARED native/puffy_native.cpp)
+target_include_directories(puffy_native PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(puffy_native PRIVATE puffy_core)
+target_compile_features(puffy_native PRIVATE cxx_std_20)
 
 if(UNIX AND NOT APPLE)
     find_package(PkgConfig REQUIRED)
@@ -55,6 +61,8 @@ if(UNIX AND NOT APPLE)
         target_link_libraries(puffy_core PRIVATE PkgConfig::X11_XTST)
         target_compile_definitions(puffy_core PUBLIC PUFFY_HAS_X11_GLOBAL_HOTKEYS=1)
     endif()
+    target_sources(puffy_core PRIVATE platform/linux/evdev_global_keyboard_listener.cpp)
+    target_compile_definitions(puffy_core PUBLIC PUFFY_HAS_EVDEV=1)
 endif()
 
 if(WIN32)
@@ -77,6 +85,7 @@ add_executable(puffy_core_demo apps/desktop/main.cpp)
 target_link_libraries(puffy_core_demo PRIVATE puffy_core)
 
 install(TARGETS puffy_core_demo RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} BUNDLE DESTINATION .)
+install(TARGETS puffy_native LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(DIRECTORY docs DESTINATION ${CMAKE_INSTALL_DOCDIR})
 include(CPack)
 
@@ -98,4 +107,12 @@ if(PUFFY_BUILD_DESKTOP)
         PREFIX "/"
         FILES ui/qml/Main.qml
     )
+    install(TARGETS puffy_desktop
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        BUNDLE DESTINATION .
+    )
 endif()
+
+install(FILES README.md LICENSE
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+)

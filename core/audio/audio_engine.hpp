@@ -54,9 +54,11 @@ public:
 
     [[nodiscard]] mixer::Mixer& mixer() noexcept { return mixer_; }
     void setMicrophoneGain(float gain) noexcept;
+    void setSoundboardGain(float gain) noexcept;
     void setMonitoringGain(float gain) noexcept;
     void setVirtualOutputGain(float gain) noexcept;
     void setMasterCeiling(float ceiling) noexcept;
+    void setMonitorMicrophone(bool enabled) noexcept;
     void setMonitoringMuted(bool muted) noexcept;
     void setVirtualMicrophoneMuted(bool muted) noexcept;
     [[nodiscard]] State state() const noexcept { return state_; }
@@ -70,7 +72,15 @@ public:
 private:
     enum class CommandType : std::uint8_t { Play, Stop, StopAll, Pause, Resume, FadeOut };
     struct Command { CommandType type{CommandType::Play}; std::int64_t soundId{0}; OutputRoute route{OutputRoute::Both}; float gain{1.0F}; bool loop{false}; float speed{1.0F}; std::size_t fadeInFrames{0}; std::size_t fadeOutFrames{0}; };
-    struct RegisteredSound { std::int64_t id{0}; std::shared_ptr<const DecodedAudio> audio; bool loop{false}; std::size_t fadeInFrames{0}; std::size_t fadeOutFrames{0}; float speed{1.0F}; bool used{false}; };
+    struct RegisteredSound {
+        std::int64_t id{0};
+        std::shared_ptr<const DecodedAudio> audio;
+        bool loop{false};
+        std::size_t fadeInFrames{0};
+        std::size_t fadeOutFrames{0};
+        float speed{1.0F};
+        std::atomic<bool> used{false};
+    };
     static constexpr std::size_t commandCapacity_ = 128;
     static constexpr std::size_t soundCapacity_ = 256;
 

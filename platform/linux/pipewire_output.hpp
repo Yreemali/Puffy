@@ -9,7 +9,9 @@ namespace puffy::platform::linux {
 class PipeWireOutput final : public audio::IAudioOutput {
 public:
     struct State;
-    explicit PipeWireOutput(std::size_t ringBufferBytes = 48000U * sizeof(float) * 2U * 2U);
+    // Four small realtime periods. Keeping this bounded prevents stale audio
+    // from turning a temporary scheduling hiccup into seconds of latency.
+    explicit PipeWireOutput(std::size_t ringBufferBytes = 16U * 1024U);
     ~PipeWireOutput() override;
 
     PipeWireOutput(const PipeWireOutput&) = delete;

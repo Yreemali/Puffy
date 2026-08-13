@@ -34,14 +34,17 @@ struct HotkeyHash {
 class HotkeyManager final {
 public:
     using Action = std::function<void()>;
+    using EventAction = std::function<void(const KeyEvent&)>;
 
     bool bind(Hotkey hotkey, Action action);
+    bool bindEvent(Hotkey hotkey, EventAction action);
     void unbind(Hotkey hotkey);
     void clear();
     void handle(const KeyEvent& event) const;
 
 private:
     std::unordered_map<Hotkey, Action, HotkeyHash> bindings_;
+    std::unordered_map<Hotkey, EventAction, HotkeyHash> eventBindings_;
 };
 
 } // namespace puffy::hotkeys

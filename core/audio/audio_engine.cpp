@@ -29,7 +29,13 @@ bool AudioEngine::start(IAudioCapture& capture, IAudioOutput& monitoringOutput,
     monitoringId_ = monitoringId;
     running_ = true;
     const auto callback = [this](AudioBlock block) { processMicrophone(block); };
-    if (!capture.open(captureId, config_.format, callback)) {
+    // Physical microphones are commonly mono even when the processing graph
+    // and outputs are stereo. Requesting stereo from PipeWire can make a
+    // perfectly valid microphone fail to negotiate, which would also prevent
+    // soundboard playback because capture drives the processing clock.
+    auto captureFormat = config_.format;
+    captureFormat.channels = 1;
+    if (!capture.open(captureId, captureFormat, callback)) {
         if (virtualMicrophone_ != nullptr) virtualMicrophone_->stop();
         monitoringOutput_->stop();
         capture_ = nullptr; monitoringOutput_ = nullptr; virtualMicrophone_ = nullptr; running_ = false;
@@ -65,10 +71,20 @@ void AudioEngine::processMicrophone(AudioBlock microphone) noexcept {
     if (channels <= 0 || frames == 0) return;
     const auto sampleCount = frames * static_cast<std::size_t>(channels);
     drainCommands();
-    const auto processedSamples = std::min(sampleCount, microphoneBuffer_.size());
-    std::copy_n(microphone.samples.begin(), processedSamples, microphoneBuffer_.begin());
-    microphoneEffects_.process(std::span<float>(microphoneBuffer_.data(), processedSamples), frames, channels);
-    mixer_.process({std::span<const float>(microphoneBuffer_.data(), processedSamples), frames, channels}, monitoringBuffer_, virtualBuffer_, frames, channels);
+
+    // Convert the capture block to the engine's internal channel layout
+    // without allocating. This handles mono microphones and stereo devices.
+    for (std::size_t frame = 0; frame < frames; ++frame) {
+        for (int channel = 0; channel < channels; ++channel) {
+            const auto sourceChannel = std::min<std::size_t>(
+                static_cast<std::size_t>(channel),
+                static_cast<std::size_t>(microphone.channels - 1));
+            microphoneBuffer_[frame * static_cast<std::size_t>(channels) + static_cast<std::size_t>(channel)] =
+                microphone.samples[frame * static_cast<std::size_t>(microphone.channels) + sourceChannel];
+        }
+    }
+    microphoneEffects_.process(std::span<float>(microphoneBuffer_.data(), sampleCount), frames, channels);
+    mixer_.process({std::span<const float>(microphoneBuffer_.data(), sampleCount), frames, channels}, monitoringBuffer_, virtualBuffer_, frames, channels);
     if (monitoringMuted_) std::fill_n(monitoringBuffer_.begin(), sampleCount, 0.0F);
     if (virtualMicrophoneMuted_) std::fill_n(virtualBuffer_.begin(), sampleCount, 0.0F);
     if (!monitoringMuted_ && monitoringOutput_ != nullptr)
@@ -86,12 +102,22 @@ bool AudioEngine::addMicrophoneEffect(effects::IAudioEffect& effect) noexcept {
 void AudioEngine::clearMicrophoneEffects() noexcept { microphoneEffects_.clear(); }
 
 bool AudioEngine::registerSound(std::int64_t soundId, std::shared_ptr<const DecodedAudio> audio, bool loop, std::size_t fadeInFrames, std::size_t fadeOutFrames, float speed) {
-    if (soundId == 0 || audio == nullptr || audio->channels <= 0 || audio->samples.empty() || running_) return false;
+    if (soundId == 0 || audio == nullptr || audio->channels <= 0 || audio->samples.empty()) return false;
     for (auto& sound : sounds_) {
-        if (sound.used && sound.id == soundId) { sound.audio = std::move(audio); sound.loop = loop; sound.fadeInFrames = fadeInFrames; sound.fadeOutFrames = fadeOutFrames; sound.speed = speed; return true; }
+        if (sound.used.load(std::memory_order_acquire) && sound.id == soundId) {
+            if (running_) return true;
+            sound.audio = std::move(audio); sound.loop = loop; sound.fadeInFrames = fadeInFrames; sound.fadeOutFrames = fadeOutFrames; sound.speed = speed; return true;
+        }
     }
     for (auto& sound : sounds_) {
-        if (!sound.used) { sound = RegisteredSound{soundId, std::move(audio), loop, fadeInFrames, fadeOutFrames, speed, true}; return true; }
+        if (!sound.used.load(std::memory_order_acquire)) {
+            // Publish all immutable audio metadata before the realtime thread
+            // can observe the slot as used.
+            sound.id = soundId; sound.audio = std::move(audio); sound.loop = loop;
+            sound.fadeInFrames = fadeInFrames; sound.fadeOutFrames = fadeOutFrames; sound.speed = speed;
+            sound.used.store(true, std::memory_order_release);
+            return true;
+        }
     }
     return false;
 }
@@ -121,7 +147,7 @@ bool AudioEngine::resumeAllSounds() noexcept { return enqueue({CommandType::Resu
 bool AudioEngine::fadeOutAllSounds() noexcept { return enqueue({CommandType::FadeOut, 0, OutputRoute::None, 0.0F}); }
 
 const DecodedAudio* AudioEngine::findSound(std::int64_t soundId) const noexcept {
-    for (const auto& sound : sounds_) if (sound.used && sound.id == soundId) return sound.audio.get();
+    for (const auto& sound : sounds_) if (sound.used.load(std::memory_order_acquire) && sound.id == soundId) return sound.audio.get();
     return nullptr;
 }
 
@@ -146,9 +172,11 @@ void AudioEngine::drainCommands() noexcept {
 }
 
 void AudioEngine::setMicrophoneGain(float gain) noexcept { mixer_.setMicrophoneGain(std::max(0.0F, gain)); }
+void AudioEngine::setSoundboardGain(float gain) noexcept { mixer_.setSoundboardGain(std::max(0.0F, gain)); }
 void AudioEngine::setMonitoringGain(float gain) noexcept { mixer_.setMonitoringGain(std::max(0.0F, gain)); }
 void AudioEngine::setVirtualOutputGain(float gain) noexcept { mixer_.setVirtualOutputGain(std::max(0.0F, gain)); }
 void AudioEngine::setMasterCeiling(float ceiling) noexcept { mixer_.setMasterCeiling(std::clamp(ceiling, 0.01F, 1.0F)); }
+void AudioEngine::setMonitorMicrophone(bool enabled) noexcept { mixer_.setMonitorMicrophone(enabled); }
 void AudioEngine::setMonitoringMuted(bool muted) noexcept { monitoringMuted_ = muted; }
 void AudioEngine::setVirtualMicrophoneMuted(bool muted) noexcept { virtualMicrophoneMuted_ = muted; }
 

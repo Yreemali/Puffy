@@ -58,9 +58,11 @@ void Mixer::process(audio::AudioBlock microphone,
         }
     };
 
+    if (microphone.valid() && config_.monitorMicrophone) {
+        add(monitoringOutput, microphone, config_.microphoneGain, 0.0, 1.0F);
+    }
     if (microphone.valid()) {
-        add(monitoringOutput, microphone, config_.microphoneGain * config_.monitoringGain, 0.0, 1.0F);
-        add(virtualOutput, microphone, config_.microphoneGain * config_.virtualOutputGain, 0.0, 1.0F);
+        add(virtualOutput, microphone, config_.microphoneGain, 0.0, 1.0F);
     }
     for (auto& voice : voices_) {
         if (!voice.active) continue;
@@ -81,7 +83,13 @@ void Mixer::process(audio::AudioBlock microphone,
             else voice.active = false;
         }
     }
+    // Bus gains are applied after all sources have been mixed. This makes the
+    // two UI faders true independent output controls: local monitoring affects
+    // microphone + soundboard, while virtual output affects microphone +
+    // soundboard sent to Discord/OBS/etc.
     for (std::size_t index = 0; index < sampleCount; ++index) {
+        monitoringOutput[index] *= config_.monitoringGain;
+        virtualOutput[index] *= config_.virtualOutputGain;
         monitoringOutput[index] = std::clamp(monitoringOutput[index], -config_.masterCeiling, config_.masterCeiling);
         virtualOutput[index] = std::clamp(virtualOutput[index], -config_.masterCeiling, config_.masterCeiling);
     }

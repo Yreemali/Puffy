@@ -14,7 +14,8 @@ CREATE TABLE IF NOT EXISTS profiles (
  ignore_super INTEGER NOT NULL DEFAULT 0, ignored_key_codes TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS playlists (
- id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE
+ id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL UNIQUE,
+ hotkey TEXT NOT NULL DEFAULT '', next_hotkey TEXT NOT NULL DEFAULT '', playback_mode INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS playlist_items (
  playlist_id INTEGER NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
@@ -40,6 +41,10 @@ bool ProfileStore::open() {
 bool ProfileStore::schema() {
     char* error = nullptr;
     if (sqlite3_exec(database_, schemaSql, nullptr, nullptr, &error) != SQLITE_OK) { const std::string message = error ? error : "profile schema failed"; sqlite3_free(error); return fail(message); }
+    // Migrate databases created by older Puffy builds without failing startup.
+    sqlite3_exec(database_, "ALTER TABLE playlists ADD COLUMN hotkey TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr);
+    sqlite3_exec(database_, "ALTER TABLE playlists ADD COLUMN next_hotkey TEXT NOT NULL DEFAULT ''", nullptr, nullptr, nullptr);
+    sqlite3_exec(database_, "ALTER TABLE playlists ADD COLUMN playback_mode INTEGER NOT NULL DEFAULT 0", nullptr, nullptr, nullptr);
     return true;
 }
 
@@ -73,8 +78,36 @@ std::vector<Profile> ProfileStore::profiles() const {
 bool ProfileStore::savePlaylist(Playlist& playlist) {
     if (!database_) return fail("ProfileStore is not open");
     sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(database_, "INSERT INTO playlists (name) VALUES (?)", -1, &statement, nullptr) != SQLITE_OK) return fail(sqlite3_errmsg(database_));
-    text(statement, 1, playlist.name); const bool ok = sqlite3_step(statement) == SQLITE_DONE; if (ok) playlist.id = sqlite3_last_insert_rowid(database_); else fail(sqlite3_errmsg(database_)); sqlite3_finalize(statement); if (!ok) return false; return replacePlaylistItems(playlist);
+    if (sqlite3_prepare_v2(database_, "INSERT INTO playlists (name,hotkey,next_hotkey,playback_mode) VALUES (?,?,?,?)", -1, &statement, nullptr) != SQLITE_OK) return fail(sqlite3_errmsg(database_));
+    text(statement, 1, playlist.name); text(statement, 2, playlist.hotkey); text(statement, 3, playlist.nextHotkey); sqlite3_bind_int(statement, 4, playlist.playbackMode); const bool ok = sqlite3_step(statement) == SQLITE_DONE; if (ok) playlist.id = sqlite3_last_insert_rowid(database_); else fail(sqlite3_errmsg(database_)); sqlite3_finalize(statement); if (!ok) return false; return replacePlaylistItems(playlist);
+}
+
+bool ProfileStore::updatePlaylistHotkeys(const Playlist& playlist) {
+    if (!database_) return fail("ProfileStore is not open");
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(database_, "UPDATE playlists SET hotkey=?,next_hotkey=?,playback_mode=? WHERE id=?", -1, &statement, nullptr) != SQLITE_OK) return fail(sqlite3_errmsg(database_));
+    text(statement, 1, playlist.hotkey); text(statement, 2, playlist.nextHotkey); sqlite3_bind_int(statement, 3, playlist.playbackMode); sqlite3_bind_int64(statement, 4, playlist.id);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE; if (!ok) fail(sqlite3_errmsg(database_)); sqlite3_finalize(statement); return ok;
+}
+
+bool ProfileStore::renamePlaylist(std::int64_t id, const std::string& name) {
+    if (!database_) return fail("ProfileStore is not open");
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(database_, "UPDATE playlists SET name=? WHERE id=?", -1, &statement, nullptr) != SQLITE_OK) return fail(sqlite3_errmsg(database_));
+    text(statement, 1, name); sqlite3_bind_int64(statement, 2, id);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) fail(sqlite3_errmsg(database_));
+    sqlite3_finalize(statement); return ok;
+}
+
+bool ProfileStore::removePlaylist(std::int64_t id) {
+    if (!database_) return fail("ProfileStore is not open");
+    sqlite3_stmt* statement = nullptr;
+    if (sqlite3_prepare_v2(database_, "DELETE FROM playlists WHERE id=?", -1, &statement, nullptr) != SQLITE_OK) return fail(sqlite3_errmsg(database_));
+    sqlite3_bind_int64(statement, 1, id);
+    const bool ok = sqlite3_step(statement) == SQLITE_DONE;
+    if (!ok) fail(sqlite3_errmsg(database_));
+    sqlite3_finalize(statement); return ok;
 }
 
 bool ProfileStore::replacePlaylistItems(const Playlist& playlist) {
@@ -88,8 +121,8 @@ bool ProfileStore::replacePlaylistItems(const Playlist& playlist) {
 
 std::vector<Playlist> ProfileStore::playlists() const {
     std::vector<Playlist> result; if (!database_) return result; sqlite3_stmt* statement = nullptr;
-    if (sqlite3_prepare_v2(database_, "SELECT id,name FROM playlists ORDER BY name", -1, &statement, nullptr) != SQLITE_OK) return result;
-    while (sqlite3_step(statement) == SQLITE_ROW) { Playlist p; p.id = sqlite3_column_int64(statement, 0); p.name = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1)); sqlite3_stmt* items = nullptr; sqlite3_prepare_v2(database_, "SELECT sound_id FROM playlist_items WHERE playlist_id=? ORDER BY position", -1, &items, nullptr); sqlite3_bind_int64(items, 1, p.id); while (sqlite3_step(items) == SQLITE_ROW) p.soundIds.push_back(sqlite3_column_int64(items, 0)); sqlite3_finalize(items); result.push_back(std::move(p)); }
+    if (sqlite3_prepare_v2(database_, "SELECT id,name,hotkey,next_hotkey,playback_mode FROM playlists ORDER BY name", -1, &statement, nullptr) != SQLITE_OK) return result;
+    while (sqlite3_step(statement) == SQLITE_ROW) { Playlist p; p.id = sqlite3_column_int64(statement, 0); p.name = reinterpret_cast<const char*>(sqlite3_column_text(statement, 1)); p.hotkey = reinterpret_cast<const char*>(sqlite3_column_text(statement, 2)); p.nextHotkey = reinterpret_cast<const char*>(sqlite3_column_text(statement, 3)); p.playbackMode = sqlite3_column_int(statement, 4); sqlite3_stmt* items = nullptr; sqlite3_prepare_v2(database_, "SELECT sound_id FROM playlist_items WHERE playlist_id=? ORDER BY position", -1, &items, nullptr); sqlite3_bind_int64(items, 1, p.id); while (sqlite3_step(items) == SQLITE_ROW) p.soundIds.push_back(sqlite3_column_int64(items, 0)); sqlite3_finalize(items); result.push_back(std::move(p)); }
     sqlite3_finalize(statement); return result;
 }
 

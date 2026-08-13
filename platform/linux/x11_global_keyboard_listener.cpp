@@ -24,6 +24,12 @@ struct X11GlobalKeyboardListener::State {
 
 namespace {
 
+int ignoreX11Error(Display*, XErrorEvent*) {
+    // XRecord can be unavailable or broken under some XWayland setups.
+    // A global keyboard listener must never be allowed to terminate the UI.
+    return 0;
+}
+
 void recordCallback(XPointer userData, XRecordInterceptData* intercepted) {
     auto& state = *reinterpret_cast<X11GlobalKeyboardListener::State*>(userData);
     if (intercepted->category == XRecordFromServer && intercepted->data_len >= 2) {
@@ -72,6 +78,9 @@ hotkeys::ListenerStatus X11GlobalKeyboardListener::start(Callback callback) {
     XRecordRange* ranges[] = {range};
     state->context = XRecordCreateContext(state->control, 0, nullptr, 0, ranges, 1);
     XFree(range);
+    // XRecordCreateContext is asynchronous.  Flush and wait for the request
+    // before using the context through the second display connection.
+    XSync(state->control, False);
     if (state->context == 0) {
         error_ = "Cannot create XRecord context";
         XCloseDisplay(state->control); XCloseDisplay(state->data);
@@ -79,8 +88,13 @@ hotkeys::ListenerStatus X11GlobalKeyboardListener::start(Callback callback) {
     }
     state->callback = std::move(callback);
     state->running = true;
+    // Some XWayland servers report XRecord failures asynchronously.  Xlib's
+    // default handler calls exit(), which is unacceptable for an optional
+    // hotkey backend.  Keep the listener best-effort instead.
+    XSetErrorHandler(ignoreX11Error);
     state->thread = std::thread([raw = state.get()] {
         XRecordEnableContext(raw->data, raw->context, recordCallback, reinterpret_cast<XPointer>(raw));
+        raw->running = false;
     });
     state_ = std::move(state);
     return hotkeys::ListenerStatus::Ready;

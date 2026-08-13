@@ -29,6 +29,8 @@ SoundboardModel::SoundboardModel(library::SoundLibrary& library, profiles::Profi
     ignoreSuper_ = settings.value("fullKeyboard/ignoreSuper", false).toBool();
     ignoredKeyCodes_ = settings.value("fullKeyboard/ignoredKeyCodes", "").toString();
     microphoneGain_ = settings.value("effects/microphoneGain", 1.0).toDouble();
+    soundboardGain_ = settings.value("audio/soundboardGain", 1.0).toDouble();
+    hearMicrophone_ = settings.value("audio/hearMicrophone", false).toBool();
     gateThreshold_ = settings.value("effects/gateThreshold", 0.015).toDouble();
     limiterCeiling_ = settings.value("effects/limiterCeiling", 0.98).toDouble();
     compressorThreshold_ = settings.value("effects/compressorThreshold", 0.5).toDouble();
@@ -38,6 +40,8 @@ SoundboardModel::SoundboardModel(library::SoundLibrary& library, profiles::Profi
     delayMix_ = settings.value("effects/delayMix", 0.0).toDouble();
     bufferFrames_ = settings.value("audio/bufferFrames", 128).toInt();
     engine_.setBufferFrames(static_cast<std::size_t>(bufferFrames_));
+    engine_.setMonitorMicrophone(hearMicrophone_);
+    engine_.setSoundboardGain(static_cast<float>(soundboardGain_));
     estimatedLatencyMs_ = engine_.latency().totalMs;
     gainEffect_.setGain(static_cast<float>(microphoneGain_));
     gateEffect_.setThreshold(static_cast<float>(gateThreshold_));
@@ -121,6 +125,21 @@ bool SoundboardModel::importProfile(const QString& path) {
 void SoundboardModel::setMicrophoneGain(double value) {
     value = std::clamp(value, 0.0, 4.0); if (microphoneGain_ == value) return; microphoneGain_ = value;
     gainEffect_.setGain(static_cast<float>(value)); QSettings().setValue("effects/microphoneGain", value); emit microphoneGainChanged();
+}
+void SoundboardModel::setSoundboardGain(double value) {
+    value = std::clamp(value, 0.0, 2.0);
+    if (soundboardGain_ == value) return;
+    soundboardGain_ = value;
+    engine_.setSoundboardGain(static_cast<float>(value));
+    QSettings().setValue("audio/soundboardGain", value);
+    emit soundboardGainChanged();
+}
+void SoundboardModel::setHearMicrophone(bool enabled) {
+    if (hearMicrophone_ == enabled) return;
+    hearMicrophone_ = enabled;
+    engine_.setMonitorMicrophone(enabled);
+    QSettings().setValue("audio/hearMicrophone", enabled);
+    emit hearMicrophoneChanged();
 }
 void SoundboardModel::setGateThreshold(double value) {
     value = std::clamp(value, 0.0, 1.0); if (gateThreshold_ == value) return; gateThreshold_ = value;
@@ -211,10 +230,18 @@ QHash<int, QByteArray> SoundboardModel::roleNames() const {
 bool SoundboardModel::addSound(const QString& path) {
     const QFileInfo file(path);
     if (!file.exists() || !file.isFile()) return setError("Sound file does not exist");
+    audio::SndFileDecoder decoder;
+    std::string decodeError;
+    const auto decoded = decoder.decode(file.absoluteFilePath().toStdString(), decodeError);
+    if (!decoded || decoded->sampleRate <= 0 || decoded->channels <= 0)
+        return setError(QString::fromStdString(decodeError.empty() ? "Unable to decode audio file" : decodeError));
     library::Sound sound;
     sound.name = file.completeBaseName().toStdString();
     sound.filePath = file.absoluteFilePath().toStdString();
+    sound.durationSeconds = static_cast<double>(decoded->frames()) / static_cast<double>(decoded->sampleRate);
     if (!library_.add(sound)) return setError(QString::fromStdString(library_.lastError()));
+    if (service_ != nullptr && !service_->prepareSound(sound.id))
+        return setError(QString::fromStdString(service_->lastError()));
     clearError();
     refresh();
     return true;

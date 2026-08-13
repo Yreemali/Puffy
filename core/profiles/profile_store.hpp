@@ -29,6 +29,9 @@ struct Playlist {
     std::int64_t id{0};
     std::string name;
     std::vector<std::int64_t> soundIds;
+    std::string hotkey;
+    std::string nextHotkey;
+    int playbackMode{0};
 };
 
 class ProfileStore final {
@@ -43,7 +46,10 @@ public:
     bool updateProfile(const Profile& profile);
     [[nodiscard]] std::vector<Profile> profiles() const;
     bool savePlaylist(Playlist& playlist);
+    bool renamePlaylist(std::int64_t id, const std::string& name);
+    bool removePlaylist(std::int64_t id);
     bool replacePlaylistItems(const Playlist& playlist);
+    bool updatePlaylistHotkeys(const Playlist& playlist);
     [[nodiscard]] std::vector<Playlist> playlists() const;
     [[nodiscard]] const std::string& lastError() const noexcept { return error_; }
 

@@ -25,6 +25,8 @@ class SoundboardModel final : public QAbstractListModel {
     Q_PROPERTY(bool ignoreSuper READ ignoreSuper WRITE setIgnoreSuper NOTIFY ignoreSuperChanged)
     Q_PROPERTY(QString ignoredKeyCodes READ ignoredKeyCodes WRITE setIgnoredKeyCodes NOTIFY ignoredKeyCodesChanged)
     Q_PROPERTY(double microphoneGain READ microphoneGain WRITE setMicrophoneGain NOTIFY microphoneGainChanged)
+    Q_PROPERTY(double soundboardGain READ soundboardGain WRITE setSoundboardGain NOTIFY soundboardGainChanged)
+    Q_PROPERTY(bool hearMicrophone READ hearMicrophone WRITE setHearMicrophone NOTIFY hearMicrophoneChanged)
     Q_PROPERTY(double gateThreshold READ gateThreshold WRITE setGateThreshold NOTIFY gateThresholdChanged)
     Q_PROPERTY(double limiterCeiling READ limiterCeiling WRITE setLimiterCeiling NOTIFY limiterCeilingChanged)
     Q_PROPERTY(double compressorThreshold READ compressorThreshold WRITE setCompressorThreshold NOTIFY compressorThresholdChanged)
@@ -94,9 +96,13 @@ public:
     void setIgnoreSuper(bool value);
     void setIgnoredKeyCodes(const QString& value);
     double microphoneGain() const noexcept { return microphoneGain_; }
+    double soundboardGain() const noexcept { return soundboardGain_; }
+    bool hearMicrophone() const noexcept { return hearMicrophone_; }
     double gateThreshold() const noexcept { return gateThreshold_; }
     double limiterCeiling() const noexcept { return limiterCeiling_; }
     void setMicrophoneGain(double value);
+    void setSoundboardGain(double value);
+    void setHearMicrophone(bool enabled);
     void setGateThreshold(double value);
     void setLimiterCeiling(double value);
     double compressorThreshold() const noexcept { return compressorThreshold_; }
@@ -146,6 +152,8 @@ signals:
     void ignoreSuperChanged();
     void ignoredKeyCodesChanged();
     void microphoneGainChanged();
+    void soundboardGainChanged();
+    void hearMicrophoneChanged();
     void gateThresholdChanged();
     void limiterCeilingChanged();
     void compressorThresholdChanged();
@@ -188,6 +196,8 @@ private:
     effects::Delay delayEffect_;
     effects::Limiter limiterEffect_;
     double microphoneGain_{1.0};
+    double soundboardGain_{1.0};
+    bool hearMicrophone_{false};
     double gateThreshold_{0.015};
     double limiterCeiling_{0.98};
     double compressorThreshold_{0.5};
