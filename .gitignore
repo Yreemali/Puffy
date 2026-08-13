@@ -1,0 +1,14 @@
+/build/
+/build-*/
+/CMakeFiles/
+cmake_install.cmake
+CMakeCache.txt
+Makefile
+CPackConfig.cmake
+CPackSourceConfig.cmake
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.cache/
+.DS_Store
+compile_commands.json
