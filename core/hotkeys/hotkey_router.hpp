@@ -25,6 +25,7 @@ public:
     void stop() noexcept;
     bool bindSound(Hotkey hotkey, std::int64_t soundId);
     bool bindSoundText(std::string_view text, std::int64_t soundId);
+    bool bindActionText(std::string_view text, HotkeyManager::EventAction action);
     void setFullKeyboardEnabled(bool enabled) noexcept { fullKeyboard_.setEnabled(enabled); }
     void setFullKeyboardMode(soundboard::FullKeyboardMode mode) noexcept { fullKeyboard_.setMode(mode); }
     void setFullKeyboardPlaylist(std::vector<int> soundIds) { fullKeyboard_.setPlaylist(std::move(soundIds)); }

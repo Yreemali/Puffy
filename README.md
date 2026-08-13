@@ -1,36 +1,42 @@
-![Build](https://img.shields.io/badge/build-passing-brightgreen)
+![Build](https://img.shields.io/badge/build-experimental-yellow)
 ![Language](https://img.shields.io/badge/language-C%2B%2B20-blue)
-![UI](https://img.shields.io/badge/UI-Qt%206%20%2B%20QML-purple)
-![Audio](https://img.shields.io/badge/audio-real--time-orange)
+![UI](https://img.shields.io/badge/UI-React%20%2B%20Tauri-purple)
+![Audio](https://img.shields.io/badge/audio-realtime-orange)
 ![Linux](https://img.shields.io/badge/Linux-PipeWire-green)
-![Status](https://img.shields.io/badge/status-experimental-yellow)
+![Windows](https://img.shields.io/badge/Windows-WASAPI-0078d4)
+![macOS](https://img.shields.io/badge/macOS-CoreAudio-black)
+![License](https://img.shields.io/badge/license-GPL--3.0--or--later-blue)
+![Stability](https://img.shields.io/badge/stability-your%20mileage%20may%20vary-red)
 
-# puffy
+# Puffy
 
-Experimental cross-platform soundboard and microphone mixer written in C++20.
+An experimental Soundpad-like soundboard that mixes your microphone with sounds,
+sends the result to a virtual microphone, and wraps the whole thing in a cute UI
+so nobody notices the audio graph screaming underneath.
 
-It plays sounds locally, mixes them with a physical microphone, and sends the result to a virtual microphone. The interface is intentionally soft and cute. The audio thread is not.
+> ⚠️ **Warning:** Puffy touches real-time audio, global keyboard events, SQLite,
+> PipeWire and platform-specific device APIs. It may produce clicks, dropouts,
+> feedback, confused audio routes or a Discord call that suddenly becomes much
+> more interesting.
 
-> ⚠️ **Warning:** puffy touches real-time audio, global keyboard events, SQLite,
-> PipeWire and platform-specific device APIs. A bad callback can produce clicks,
-> dropouts, feedback or a very annoyed Discord call.
+> ⚠️ **Warning:** Full Keyboard Mode reacts to key events. It does not store typed
+> text, keyboard history or telemetry. Your keyboard is used as a sound trigger,
+> not as a diary.
 
-> ⚠️ **Warning:** Full Keyboard Mode listens for key events only to trigger sounds.
-> It does not store typed text, keyboard history or telemetry. Normal key input is
-> not suppressed by default.
+> ⚠️ **Warning:** Windows and macOS application backends are implemented, but they
+> need proper virtual-audio drivers/components before they can expose a real
+> system-wide virtual microphone. A fake endpoint would only be a very confident
+> lie.
 
-> ⚠️ **Warning:** Linux is the currently implemented platform. Windows and macOS
-> backend contracts exist, but their system virtual microphone drivers are not
-> included yet.
+## What is this?
 
-## What is puffy?
-
-puffy is an open-source Soundpad-like soundboard for people who want to route:
+Puffy is an open-source soundboard and microphone mixer for people who need to
+route sounds to themselves, to a call, or to both at once:
 
 ```text
 Physical microphone
         +
-Soundboard voices
+Soundboard sounds
         ↓
 Realtime mixer
    ┌────┴────┐
@@ -38,217 +44,185 @@ Realtime mixer
 Headphones  Virtual microphone
 ```
 
-Each sound can be routed to:
+Every sound can be routed to:
 
 - headphones only;
 - virtual microphone only;
-- both.
+- both;
+- nowhere, if the sound has made poor life choices.
 
-That means you can send an airhorn to Discord without hearing the airhorn in your own headphones. Tiny feature. Very important feature.
+## Features
 
-## Current features
-
-- C++20 core with CMake.
-- Qt 6/QML desktop interface.
+- C++20 real-time audio core.
+- React + TypeScript + Vite web UI inside a Tauri desktop window.
 - SQLite sound library, profiles and playlists.
-- WAV, FLAC, OGG and other formats supported by the installed `libsndfile` build.
-- Decoded audio cache with memory limit and eviction.
-- Simultaneous sound voices.
-- Sound routing: headphones, virtual microphone, both.
-- Per-sound volume, loop, speed, fade-in and fade-out.
-- Restart, overlap, ignore-if-playing, toggle and hold playback modes.
-- Microphone mixing and monitoring.
+- WAV, MP3, FLAC, OGG and formats supported by the installed decoder backend.
+- Simultaneous playback with per-sound volume and routing.
+- Restart, overlap, ignore, toggle and hold playback modes.
+- Microphone capture, monitoring and virtual-microphone mixing.
 - Gain, noise gate, compressor, limiter, low-pass, high-pass and delay effects.
-- Master output limiter.
-- Full Keyboard Mode:
-  - random sounds;
-  - sequential playlists;
-  - single sound;
-  - no-immediate-repeat;
-  - configurable modifier/key blacklist;
-  - configurable OS key repeat behavior.
-- Linux PipeWire capture, monitoring output and virtual microphone source.
-- Linux X11 global keyboard listener.
-- JSON profile export/import.
-- System tray commands.
-- CPack and GitHub Actions foundation.
+- Full Keyboard Mode with random, sequential and single-sound behavior.
+- Modifier blacklist and configurable OS key-repeat behavior.
+- Playlist playback modes, auto-continue and repeat-current behavior.
+- Soundboard layouts: Compact, Normal and Large.
+- Local profiles with avatar, theme and customizable palette.
+- Import/export of local configuration.
+- Linux PipeWire audio backend.
+- X11 global keyboard listener, with Wayland limitations documented honestly.
+- Windows WASAPI/MMDevice backend and passive low-level keyboard hook.
+- macOS Core Audio/AUHAL backend and passive Quartz keyboard event tap.
 
-## Linux virtual microphone
+## Platform reality check
 
-On Linux, puffy creates a PipeWire source named:
+| Platform | Desktop app | Physical audio | Global keys | Virtual microphone |
+| --- | --- | --- | --- | --- |
+| Linux | Working development target | PipeWire | X11 + evdev fallback | PipeWire virtual source |
+| Windows 10/11 | Native backend and package pipeline | WASAPI/MMDevice | Passive low-level hook | Requires the separate signed driver |
+| macOS 12+ | Native backend and package pipeline | Core Audio/AUHAL | Passive event tap + permission | Requires the separate signed audio component |
 
-```text
-OpenSoundboard Virtual Microphone
-```
+The application itself never needs administrator privileges. Elevation belongs
+only to installing, updating or removing the platform virtual-audio component.
 
-The source carries:
-
-```text
-processed physical microphone
-    +
-soundboard audio
-```
-
-Select it as the input device in Discord, OBS, TeamSpeak or another PipeWire/PulseAudio-compatible application.
-
-PipeWire must be available in the user session. If it is not available, puffy should enter a degraded state instead of pretending that a virtual device exists.
-
-## The cursed parts
-
-puffy deliberately separates portable audio logic from platform code:
+## The audio pipeline
 
 ```text
-core/
-  mixer, effects, soundboard, library, profiles, hotkeys
-
-platform/linux/
-  PipeWire capture/output/virtual microphone
-  X11 global keyboard listener
-
-platform/windows/
-  WASAPI and virtual-device contracts
-
-platform/macos/
-  Core Audio and virtual-device contracts
+Microphone capture ──→ microphone effects ──┐
+                                           ├─→ mixer ─→ virtual microphone
+Sound playback ─────→ per-sound routing ───┘       └─→ local monitoring
 ```
 
-The audio callback must not perform:
+The audio callback is expected to remain boring. It must not perform:
 
 - allocations;
-- database queries;
-- filesystem I/O;
+- filesystem or database I/O;
 - blocking mutex operations;
 - synchronous logging;
 - UI calls.
 
 If the callback starts allocating memory, the gremlins win.
 
-## Build
+## Build the web desktop app
 
-### Core and tests
+```bash
+cd ui/web
+npm ci
+npm run build
+```
+
+Run the Tauri desktop window during development:
+
+```bash
+cd ui/web
+npm run tauri:dev
+```
+
+The Tauri commands build and stage the platform C++ library automatically. On
+Windows, `puffy_native.dll` is installed beside the executable. On macOS, the
+native dylib and its non-system dependencies are embedded in
+`Puffy.app/Contents/Frameworks` with relocatable `@rpath` references.
+
+Unsigned platform packages can be produced with:
+
+```text
+Windows: npm run tauri:build -- --bundles nsis
+macOS:   npm run tauri:build -- --bundles app,dmg
+Linux:   npm run tauri:build -- --bundles appimage
+```
+
+Platform-specific installation and release instructions live here:
+
+- [Linux installation](docs/guides/INSTALL_LINUX.md)
+- [Windows installation](docs/guides/INSTALL_WINDOWS.md)
+- [macOS installation](docs/guides/INSTALL_MACOS.md)
+- [Linux artifact signing](docs/guides/SIGN_LINUX.md)
+- [Windows application and driver signing](docs/guides/SIGN_WINDOWS.md)
+- [macOS signing and notarization](docs/guides/SIGN_MACOS.md)
+- [Release checklist](docs/guides/RELEASE_CHECKLIST.md)
+
+The web renderer is only the interface. Native playback, device access, hotkeys
+and real-time audio cross the bridge into the C++/Rust host layer.
+
+## Build the C++ core
 
 ```bash
 cmake -S . -B build \
-  -DPUFFY_BUILD_TESTS=ON \
-  -DPUFFY_BUILD_DESKTOP=OFF
+  -DPUFFY_BUILD_TESTS=ON
 
 cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ```
 
-### Qt desktop application
+The CMake project builds the portable C++ engine and native bridge. The only
+desktop interface is the React/Tauri application under `ui/web`; the former
+Qt/QML frontend has been retired.
 
-Dependencies include:
+## Linux status
 
-- CMake 3.21+;
-- C++20 compiler;
-- Qt 6.5+ with Core, Gui, Qml, Quick, QuickControls2 and Widgets;
-- SQLite3;
-- Linux: PipeWire development package and, for X11 global hotkeys, X11/Xtst;
-- Linux audio decoding: `libsndfile`.
+Linux is the main development target. Puffy uses PipeWire for capture,
+monitoring and the virtual microphone source:
 
-```bash
-cmake -S . -B build-desktop \
-  -DPUFFY_BUILD_DESKTOP=ON \
-  -DPUFFY_BUILD_TESTS=ON
-
-cmake --build build-desktop --parallel
-ctest --test-dir build-desktop --output-on-failure
+```text
+OpenSoundboard Virtual Microphone
 ```
 
-Run the desktop binary:
+PipeWire must be available in the user session. X11 global hotkeys are supported
+where the XRecord extension is available. Wayland global keyboard capture depends
+on the compositor and its security model; Puffy does not bypass that model.
 
-```bash
-./build-desktop/puffy_desktop
-```
+## Windows and macOS status
 
-## Packaging
+WASAPI/MMDevice and Core Audio backends provide physical capture, monitoring,
+device enumeration and global-key handling. A
+system-wide microphone endpoint requires an additional platform component:
 
-CPack can create a Linux archive:
+- Windows: a properly signed virtual audio driver;
+- macOS: an Audio Server Plug-in or DriverKit component with signing and entitlements.
 
-```bash
-cmake --build build-desktop --target package
-```
+The app-side transport senders and component contracts are implemented under
+`platform/` and `drivers/`. Production driver binaries still require native SDK
+builds, signing, installation tests and — regrettably — paperwork.
 
-Generated package formats depend on the CPack environment.
-
-## Platform status
-
-### Linux
-
-The implemented target. PipeWire capture, monitoring output, virtual microphone and X11 global keyboard support are present.
-
-Wayland global keyboard behavior depends on the compositor and permission model. puffy does not silently pretend that an X11 listener works under every Wayland session.
-
-### Windows
-
-WASAPI/MMDevice should provide physical capture and monitoring. A microphone endpoint visible to Discord requires a separate signed virtual audio driver. The application cannot create that system endpoint as an ordinary user process.
-
-### macOS
-
-Core Audio can provide capture and monitoring. A system-wide virtual input requires an Audio Server Plug-in or DriverKit component, plus signing, entitlements and packaging approval.
-
-The Windows/macOS files in this repository are contracts/stubs, not finished virtual drivers. This is intentional; fake drivers are not a feature.
+GitHub Actions builds unsigned Windows and macOS artifacts so platform compiler
+failures are visible early. Unsigned CI artifacts are development output, not a
+promise that Gatekeeper, SmartScreen or a kernel will suddenly become trusting.
 
 ## Repository layout
 
 ```text
-apps/desktop/       desktop entry points
-core/audio/         audio formats, decoder, engine and ports
-core/effects/       realtime microphone effects
-core/hotkeys/       bindings, routing and listener contracts
-core/library/       SQLite library and decoded cache
-core/mixer/         realtime voice mixer
-core/profiles/      profiles and playlists persistence
-core/soundboard/    playback policies and service layer
-platform/linux/     PipeWire and X11 implementations
-platform/windows/   Windows backend contracts
-platform/macos/     macOS backend contracts
-ui/qml/             soft puffy interface
-ui/qt/              Qt models and bridges
-tests/              core tests and mocks
-docs/               architecture and platform notes
+core/                 portable audio, mixer, effects and playback logic
+native/               native bridge used by the web desktop app
+platform/linux/      PipeWire, X11 and evdev integrations
+platform/windows/    WASAPI and Windows keyboard backend
+platform/macos/      Core Audio and macOS keyboard backend
+drivers/             virtual-device component contracts
+virtual_audio/       shared virtual-device transport identity
+ui/web/               React/Tauri desktop interface
+apps/desktop/         native desktop entry point
+tests/                core tests and mocks
+docs/                 architecture and platform notes
+docs/guides/          installation, signing and release instructions
+packaging/arch/       Arch Linux packaging files
 ```
 
 ## Privacy
 
-puffy does not need to record typed text. Keyboard events are transient control signals used for hotkeys and Full Keyboard Mode.
-
-The project does not intentionally store:
+Puffy is local-first. It does not intentionally store:
 
 - typed text;
 - keyboard history;
-- sound-trigger history;
 - microphone recordings;
-- telemetry without explicit future consent.
+- remote user profiles;
+- telemetry without explicit consent.
 
-## Roadmap
-
-- finish device hotplug and precise latency reporting;
-- add EQ, reverb and independent pitch shift;
-- add drag-and-drop library management and waveform previews;
-- finish playlist/profile editing UI;
-- implement native Windows virtual audio driver;
-- implement macOS virtual audio component;
-- add Windows/macOS CI, signing and installers;
-- run long-duration real-time audio stress tests.
+Keyboard events are transient control signals. They enter the hotkey router and
+are forgotten when they are no longer needed.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+Puffy is free software released under the GNU General Public License, version 3
+or any later version. See [`LICENSE`](LICENSE).
 
-## Final warning
+No warranty is provided. Especially not for your audio routing, your hotkeys, or
+the emotional consequences of pressing Full Keyboard Mode in a meeting.
 
-This is experimental audio software.
-
-It may produce:
-
-- silence;
-- latency;
-- feedback;
-- too many airhorns;
-- a sudden desire to rewrite the mixer.
-
-Use headphones. Keep the master volume reasonable. Do not test the limiter with your expensive speakers at maximum volume.
-
-> **Good luck. Stay soft. Keep the callback real-time safe.**
+> **Good luck building it.**

@@ -1,5 +1,7 @@
 #include "core/soundboard/soundboard_service.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <utility>
 
 namespace puffy::soundboard {
@@ -64,6 +66,44 @@ bool SoundboardService::trigger(std::int64_t soundId, bool pressed, bool osRepea
 void SoundboardService::stopAll() noexcept {
     policy_.stopAll();
     engine_.stopAllSounds();
+}
+
+std::vector<float> SoundboardService::waveform(std::int64_t soundId,
+                                                std::size_t points) {
+    points = std::clamp<std::size_t>(points, 16, 256);
+    const auto sound = library_.find(soundId);
+    if (!sound) {
+        setError("Sound not found");
+        return {};
+    }
+
+    std::string error;
+    const auto decoded = cache_.load(sound->filePath, decoder_, error);
+    if (!decoded || decoded->channels <= 0 || decoded->samples.empty()) {
+        setError(error.empty() ? "Unable to decode waveform" : error);
+        return {};
+    }
+
+    std::vector<float> peaks(points, 0.0F);
+    const auto frames = decoded->frames();
+    const auto channels = static_cast<std::size_t>(decoded->channels);
+    for (std::size_t point = 0; point < points; ++point) {
+        const auto begin = point * frames / points;
+        const auto end = std::max(begin + 1, (point + 1) * frames / points);
+        float peak = 0.0F;
+        for (std::size_t frame = begin; frame < std::min(end, frames); ++frame) {
+            for (std::size_t channel = 0; channel < channels; ++channel) {
+                peak = std::max(peak, std::abs(decoded->samples[frame * channels + channel]));
+            }
+        }
+        peaks[point] = peak;
+    }
+    const auto maximum = *std::max_element(peaks.begin(), peaks.end());
+    if (maximum > 0.000001F) {
+        for (auto& peak : peaks) peak = std::clamp(peak / maximum, 0.02F, 1.0F);
+    }
+    lastError_.clear();
+    return peaks;
 }
 
 } // namespace puffy::soundboard

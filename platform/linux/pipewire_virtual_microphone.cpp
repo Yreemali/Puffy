@@ -83,6 +83,8 @@ bool PipeWireVirtualMicrophone::start() {
         PW_KEY_MEDIA_CLASS, "Audio/Source",
         PW_KEY_NODE_NAME, "puffy_virtual_microphone",
         PW_KEY_NODE_DESCRIPTION, "OpenSoundboard Virtual Microphone",
+        PW_KEY_NODE_LATENCY, "128/48000",
+        PW_KEY_NODE_FORCE_QUANTUM, "128",
         nullptr);
     state_->stream = pw_stream_new_simple(pw_thread_loop_get_loop(state_->loop),
                                            "OpenSoundboard Virtual Microphone",
@@ -119,7 +121,13 @@ bool PipeWireVirtualMicrophone::pushAudio(std::span<const float> samples, std::s
     std::uint32_t write = 0;
     const auto used = spa_ringbuffer_get_write_index(&state_->ring, &write);
     const auto available = used > 0 ? static_cast<std::size_t>(used) : 0U;
-    if (available > state_->storage.size() || state_->storage.size() - available < bytes) return false;
+    if (available > state_->storage.size() || state_->storage.size() - available < bytes) {
+        // A virtual microphone must remain live. Discard old queued audio
+        // rather than delivering it seconds late to Discord/OBS.
+        const auto newRead = write + static_cast<std::uint32_t>(bytes)
+            - static_cast<std::uint32_t>(state_->storage.size());
+        spa_ringbuffer_read_update(&state_->ring, static_cast<std::int32_t>(newRead));
+    }
     spa_ringbuffer_write_data(&state_->ring, state_->storage.data(), static_cast<std::uint32_t>(state_->storage.size()),
                               write % static_cast<std::uint32_t>(state_->storage.size()), samples.data(), static_cast<std::uint32_t>(bytes));
     spa_ringbuffer_write_update(&state_->ring, static_cast<std::int32_t>(write + bytes));

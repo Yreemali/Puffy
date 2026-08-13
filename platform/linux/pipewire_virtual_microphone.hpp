@@ -9,7 +9,7 @@ namespace puffy::platform::linux {
 class PipeWireVirtualMicrophone final : public audio::IVirtualMicrophone {
 public:
     struct State;
-    explicit PipeWireVirtualMicrophone(std::size_t ringBufferBytes = 48000U * sizeof(float) * 2U * 2U);
+    explicit PipeWireVirtualMicrophone(std::size_t ringBufferBytes = 16U * 1024U);
     ~PipeWireVirtualMicrophone() override;
 
     PipeWireVirtualMicrophone(const PipeWireVirtualMicrophone&) = delete;

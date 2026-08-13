@@ -39,7 +39,7 @@ void Mixer::process(audio::AudioBlock microphone,
     std::fill_n(virtualOutput.begin(), sampleCount, 0.0F);
 
     auto add = [outputChannels, frames](std::span<float> destination, audio::AudioBlock source,
-                                        float gain, double position, float speed) {
+                                        float gain, double position, float speed, float* peak) {
         if (!source.valid()) return;
         const auto sourceChannels = static_cast<std::size_t>(source.channels);
         for (std::size_t frame = 0; frame < frames; ++frame) {
@@ -52,15 +52,20 @@ void Mixer::process(audio::AudioBlock microphone,
                 const auto sourceChannel = std::min<std::size_t>(static_cast<std::size_t>(channel), sourceChannels - 1);
                 const auto first = source.samples[sourceFrame * sourceChannels + sourceChannel];
                 const auto second = source.samples[nextFrame * sourceChannels + sourceChannel];
-                destination[frame * static_cast<std::size_t>(outputChannels) + static_cast<std::size_t>(channel)] +=
-                    (first + (second - first) * fraction) * gain;
+                const auto sample = (first + (second - first) * fraction) * gain;
+                destination[frame * static_cast<std::size_t>(outputChannels) + static_cast<std::size_t>(channel)] += sample;
+                if (peak != nullptr) *peak = std::max(*peak, std::abs(sample));
             }
         }
     };
 
+    float microphonePeak = 0.0F;
+    float soundboardPeak = 0.0F;
+    if (microphone.valid() && config_.monitorMicrophone) {
+        add(monitoringOutput, microphone, config_.microphoneGain, 0.0, 1.0F, &microphonePeak);
+    }
     if (microphone.valid()) {
-        add(monitoringOutput, microphone, config_.microphoneGain * config_.monitoringGain, 0.0, 1.0F);
-        add(virtualOutput, microphone, config_.microphoneGain * config_.virtualOutputGain, 0.0, 1.0F);
+        add(virtualOutput, microphone, config_.microphoneGain, 0.0, 1.0F, &microphonePeak);
     }
     for (auto& voice : voices_) {
         if (!voice.active) continue;
@@ -72,19 +77,42 @@ void Mixer::process(audio::AudioBlock microphone,
             : (voice.fadeOutFrames > 0 && remaining <= fadeFrames
                 ? static_cast<float>(remaining) / static_cast<float>(fadeFrames) : 1.0F);
         if (audio::contains(voice.route, audio::OutputRoute::Headphones))
-            add(monitoringOutput, voice.block, voice.gain * config_.soundboardGain * fadeMultiplier, voice.position, voice.speed);
+            add(monitoringOutput, voice.block, voice.gain * config_.soundboardGain * fadeMultiplier, voice.position, voice.speed, &soundboardPeak);
         if (audio::contains(voice.route, audio::OutputRoute::VirtualMicrophone))
-            add(virtualOutput, voice.block, voice.gain * config_.soundboardGain * fadeMultiplier, voice.position, voice.speed);
+            add(virtualOutput, voice.block, voice.gain * config_.soundboardGain * fadeMultiplier, voice.position, voice.speed, &soundboardPeak);
         voice.position += static_cast<double>(frames) * voice.speed;
         if (voice.position >= static_cast<double>(voice.block.frames)) {
             if (voice.loop) voice.position = std::fmod(voice.position, static_cast<double>(voice.block.frames));
             else voice.active = false;
         }
     }
+    // Bus gains are applied after all sources have been mixed. This makes the
+    // two UI faders true independent output controls: local monitoring affects
+    // microphone + soundboard, while virtual output affects microphone +
+    // soundboard sent to Discord/OBS/etc.
+    float monitoringPeak = 0.0F;
+    float virtualPeak = 0.0F;
     for (std::size_t index = 0; index < sampleCount; ++index) {
+        monitoringOutput[index] *= config_.monitoringGain * config_.masterGain;
+        virtualOutput[index] *= config_.virtualOutputGain * config_.masterGain;
         monitoringOutput[index] = std::clamp(monitoringOutput[index], -config_.masterCeiling, config_.masterCeiling);
         virtualOutput[index] = std::clamp(virtualOutput[index], -config_.masterCeiling, config_.masterCeiling);
+        monitoringPeak = std::max(monitoringPeak, std::abs(monitoringOutput[index]));
+        virtualPeak = std::max(virtualPeak, std::abs(virtualOutput[index]));
     }
+    microphoneLevel_.store(std::clamp(microphonePeak, 0.0F, 1.0F), std::memory_order_relaxed);
+    soundboardLevel_.store(std::clamp(soundboardPeak, 0.0F, 1.0F), std::memory_order_relaxed);
+    monitoringLevel_.store(std::clamp(monitoringPeak, 0.0F, 1.0F), std::memory_order_relaxed);
+    virtualOutputLevel_.store(std::clamp(virtualPeak, 0.0F, 1.0F), std::memory_order_relaxed);
+}
+
+Mixer::Levels Mixer::levels() const noexcept {
+    return {
+        microphoneLevel_.load(std::memory_order_relaxed),
+        soundboardLevel_.load(std::memory_order_relaxed),
+        monitoringLevel_.load(std::memory_order_relaxed),
+        virtualOutputLevel_.load(std::memory_order_relaxed),
+    };
 }
 
 } // namespace puffy::mixer

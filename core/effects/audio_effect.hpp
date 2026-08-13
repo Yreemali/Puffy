@@ -4,6 +4,7 @@
 #include <array>
 #include <algorithm>
 #include <span>
+#include <atomic>
 
 namespace puffy::effects {
 
@@ -28,38 +29,38 @@ private:
 
 class NoiseGate final : public IAudioEffect {
 public:
-    void setThreshold(float threshold) noexcept { threshold_ = threshold; }
-    void setReleaseSamples(std::size_t samples) noexcept { releaseSamples_ = samples; }
+    void setThreshold(float threshold) noexcept { threshold_.store(threshold, std::memory_order_relaxed); }
+    void setReleaseSamples(std::size_t samples) noexcept { releaseSamples_.store(samples, std::memory_order_relaxed); }
     void prepare(double, std::size_t, int) noexcept override {}
     void process(std::span<float> samples, std::size_t frames, int channels) noexcept override;
     void reset() noexcept override { remaining_ = 0; }
 private:
-    float threshold_{0.015F};
-    std::size_t releaseSamples_{2400};
+    std::atomic<float> threshold_{0.015F};
+    std::atomic<std::size_t> releaseSamples_{2400};
     std::size_t remaining_{0};
 };
 
 class Limiter final : public IAudioEffect {
 public:
-    void setCeiling(float ceiling) noexcept { ceiling_ = ceiling; }
+    void setCeiling(float ceiling) noexcept { ceiling_.store(ceiling, std::memory_order_relaxed); }
     void prepare(double, std::size_t, int) noexcept override {}
     void process(std::span<float> samples, std::size_t, int) noexcept override;
     void reset() noexcept override {}
 private:
-    float ceiling_{0.98F};
+    std::atomic<float> ceiling_{0.98F};
 };
 
 class Compressor final : public IAudioEffect {
 public:
-    void setThreshold(float value) noexcept { threshold_ = value; }
-    void setRatio(float value) noexcept { ratio_ = value < 1.0F ? 1.0F : value; }
+    void setThreshold(float value) noexcept { threshold_.store(value, std::memory_order_relaxed); }
+    void setRatio(float value) noexcept { ratio_.store(value < 1.0F ? 1.0F : value, std::memory_order_relaxed); }
     void setAttackRelease(float attack, float release) noexcept { attack_ = attack; release_ = release; }
     void prepare(double sampleRate, std::size_t, int) noexcept override { sampleRate_ = static_cast<float>(sampleRate); }
     void process(std::span<float> samples, std::size_t, int) noexcept override;
     void reset() noexcept override { envelope_ = 0.0F; }
 private:
-    float threshold_{0.5F};
-    float ratio_{4.0F};
+    std::atomic<float> threshold_{0.5F};
+    std::atomic<float> ratio_{4.0F};
     float attack_{0.01F};
     float release_{0.1F};
     float sampleRate_{48000.0F};

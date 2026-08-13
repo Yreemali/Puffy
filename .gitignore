@@ -12,3 +12,12 @@ CPackSourceConfig.cmake
 .cache/
 .DS_Store
 compile_commands.json
+packaging/arch/*.pkg.tar.zst
+ui/web/node_modules/
+ui/web/dist/
+ui/web/.vite/
+ui/web/*.tsbuildinfo
+ui/web/src-tauri/target/
+ui/web/src-tauri/native/
+ui/web/src-tauri/generated.platform.conf.json
+ui/web/src-tauri/gen/

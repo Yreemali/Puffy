@@ -1,8 +1,8 @@
-# puffy — архитектура и feasibility analysis
+# Puffy — архитектура и feasibility analysis
 
 ## Решение
 
-`puffy` строится как C++20 audio engine с Qt 6/QML UI и узкими платформенными адаптерами. Внутренний engine всегда разделяет два preallocated bus: `monitoring` и `virtual microphone`. Это позволяет для каждого soundboard-звука выбрать `Headphones only`, `Virtual microphone only` или `Both`; дополнительный флаг «не мониторить soundboard» не является обходным путём, а штатным маршрутом `Virtual microphone only`.
+`Puffy` строится как C++20 audio engine с React/TypeScript UI в Tauri-оболочке и узкими платформенными адаптерами. Внутренний engine всегда разделяет два preallocated bus: `monitoring` и `virtual microphone`. Это позволяет для каждого soundboard-звука выбрать `Headphones only`, `Virtual microphone only` или `Both`; дополнительный флаг «не мониторить soundboard» не является обходным путём, а штатным маршрутом `Virtual microphone only`.
 
 Платформенный virtual microphone не может быть одной полностью одинаковой библиотекой:
 
@@ -15,16 +15,18 @@
 ## Технологии
 
 * C++20, CMake 3.21+, clang-format/clang-tidy.
-* Qt 6.5+ и Qt Quick/QML для desktop UI.
+* React, TypeScript и Vite для renderer; Tauri 2/Rust для desktop host и IPC.
 * Native audio: WASAPI (Windows), PipeWire (Linux), Core Audio (macOS).
-* SQLite 3 для metadata и профилей; JSON экспорт — Qt JSON либо vendored single-header библиотека с проверенной лицензией.
-* libsndfile для WAV/FLAC/OGG/AIFF/AU where supported; mpg123/minimp3 или FFmpeg-профиль для MP3/AAC/M4A/Opus после отдельной license review. Decode worker не вызывается из callback.
-* Лицензия проекта: GPL-3.0-or-later. SQLite public domain; Qt LGPL 3 (использовать динамическую линковку и соблюдать LGPL); PipeWire MIT/LGPL-компоненты проверяются по используемым пакетам; Windows/macOS SDK — системные SDK с их условиями. Точные версии и notices фиксируются в `third_party/THIRD_PARTY_NOTICES.md` перед релизом.
+* SQLite 3 для metadata и профилей; JSON snapshots передаются через узкий C ABI/Rust command bridge.
+* libsndfile для WAV/MP3/FLAC/OGG/AIFF/AU where supported; дополнительные AAC/M4A/Opus backends требуют отдельной license review. Decode worker не вызывается из callback.
+* Лицензия проекта: GPL-3.0-or-later. SQLite public domain; Tauri/React и PipeWire dependencies проверяются по используемым пакетам; Windows/macOS SDK — системные SDK с их условиями. Точные версии и notices фиксируются в `third_party/THIRD_PARTY_NOTICES.md` перед релизом.
 
 ## Слои
 
 ```text
-QML UI / ViewModels
+React UI / Zustand state
+        |
+Tauri commands / Rust host / C ABI
         |
 Application services (commands, profiles, notifications)
         |
@@ -37,7 +39,7 @@ Platform adapters: WASAPI | PipeWire | Core Audio
 Optional privileged components: Windows driver | macOS plug-in
 ```
 
-Core не знает Qt, OS key codes, device handles или database connections. UI получает immutable snapshots и посылает commands через application services.
+Core не знает React/Tauri, OS key codes или window handles. UI получает immutable snapshots и посылает commands через native bridge.
 
 ## Потоки
 
@@ -99,7 +101,7 @@ Full Keyboard Mode — отдельный controller с режимами Random/
 
 ## Roadmap
 
-1. Phase 1: текущий core contracts, mixer routing, tests; затем Qt shell, SQLite library, WAV/FLAC playback.
+1. Phase 1: core contracts, mixer routing, tests; затем Tauri shell, SQLite library и multi-format playback.
 2. Phase 2: native device abstraction, global hotkeys, per-sound playback modes and stop commands.
 3. Phase 3: capture, resampling, monitoring, meters and latency reporting.
 4. Phase 4: PipeWire virtual node, Windows driver prototype/installer, macOS Audio Server Plug-in prototype.

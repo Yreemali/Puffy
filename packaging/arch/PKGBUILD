@@ -1,0 +1,28 @@
+# Maintainer: puffy contributors
+pkgname=puffy
+pkgver=0.2.0
+pkgrel=1
+pkgdesc='Cute cross-platform soundboard and real-time microphone mixer'
+arch=('x86_64')
+url='https://github.com/Yreemali/Puffy'
+license=('GPL-3.0-or-later')
+depends=('webkit2gtk-4.1' 'gtk3' 'sqlite' 'libsndfile' 'pipewire' 'libx11' 'libxtst')
+makedepends=('cmake' 'ninja' 'git' 'cargo' 'nodejs' 'npm')
+source=('puffy::git+https://github.com/Yreemali/Puffy.git#branch=main')
+sha256sums=('SKIP')
+
+build() {
+    cd "$srcdir/puffy/ui/web"
+    npm ci
+    npm run tauri:build -- --no-bundle
+}
+
+package() {
+    install -Dm755 "$srcdir/puffy/ui/web/src-tauri/target/release/puffy" "$pkgdir/usr/bin/puffy"
+    install -Dm755 "$srcdir/puffy/build-tauri-native/libpuffy_native.so" \
+        "$pkgdir/usr/lib/Puffy/libpuffy_native.so"
+    install -Dm644 "$srcdir/puffy/packaging/arch/puffy.desktop" \
+        "$pkgdir/usr/share/applications/puffy.desktop"
+    install -Dm644 "$srcdir/puffy/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

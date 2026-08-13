@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake g++ libsqlite3-dev libpipewire-0.3-dev libx11-dev libxtst-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake g++ libsqlite3-dev libsndfile1-dev libpipewire-0.3-dev libx11-dev libxtst-dev
       - name: Configure
         run: cmake -S . -B build -DPUFFY_BUILD_TESTS=ON
       - name: Build
@@ -19,3 +19,67 @@ jobs:
         run: ctest --test-dir build --output-on-failure
       - name: Package
         run: cmake --build build --target package
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native dependencies
+        run: vcpkg install sqlite3:x64-windows-static libsndfile:x64-windows-static
+      - name: Configure
+        run: cmake -S . -B build -DPUFFY_BUILD_TESTS=ON -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows-static
+      - name: Build
+        run: cmake --build build --config Release --parallel
+      - name: Test
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Install web dependencies
+        working-directory: ui/web
+        run: npm ci
+      - name: Build Windows desktop installer
+        working-directory: ui/web
+        env:
+          VCPKG_TARGET_TRIPLET: x64-windows-static
+        run: npm run tauri:build -- --bundles nsis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Puffy-windows-unsigned
+          path: ui/web/src-tauri/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ui/web/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native dependencies
+        run: brew install sqlite3 libsndfile
+      - name: Export CMake package roots
+        run: echo "CMAKE_PREFIX_PATH=$(brew --prefix sqlite3):$(brew --prefix libsndfile)" >> "$GITHUB_ENV"
+      - name: Configure
+        run: cmake -S . -B build -DPUFFY_BUILD_TESTS=ON
+      - name: Build
+        run: cmake --build build --parallel
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+      - name: Install web dependencies
+        working-directory: ui/web
+        run: npm ci
+      - name: Build macOS application bundle
+        working-directory: ui/web
+        run: npm run tauri:build -- --bundles app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Puffy-macos-unsigned
+          path: ui/web/src-tauri/target/release/bundle/macos/Puffy.app
+          if-no-files-found: error

@@ -6,7 +6,9 @@
 #include "core/soundboard/playback_policy.hpp"
 
 #include <cstdint>
+#include <cstddef>
 #include <unordered_set>
+#include <vector>
 
 namespace puffy::soundboard {
 
@@ -25,6 +27,11 @@ public:
     // suppress the OS key event; it only creates playback commands.
     bool trigger(std::int64_t soundId, bool pressed, bool osRepeat = false);
     void stopAll() noexcept;
+
+    // Builds display-only peak data outside the realtime callback. The result
+    // is normalized to [0, 1] and contains one absolute peak per visual bin.
+    [[nodiscard]] std::vector<float> waveform(std::int64_t soundId,
+                                               std::size_t points = 64);
 
     [[nodiscard]] const std::string& lastError() const noexcept { return lastError_; }
 

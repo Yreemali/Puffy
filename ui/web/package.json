@@ -1,0 +1,32 @@
+{
+  "name": "puffy-web-ui",
+  "private": true,
+  "version": "0.2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "native:prepare": "node scripts/tauri.mjs prepare",
+    "tauri:dev": "node scripts/tauri.mjs dev",
+    "tauri:build": "node scripts/tauri.mjs build",
+    "desktop": "node scripts/tauri.mjs dev",
+    "desktop:build": "node scripts/tauri.mjs build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/plugin-dialog": "^2.4.0",
+    "@vitejs/plugin-react": "latest",
+    "vite": "latest",
+    "typescript": "latest",
+    "react": "latest",
+    "react-dom": "latest",
+    "lucide-react": "latest",
+    "zustand": "latest"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.8.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0"
+  }
+}

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Puffy
+Comment=Soft and slightly chaotic soundboard for your microphone
+Exec=puffy
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=soundboard;microphone;pipewire;audio;

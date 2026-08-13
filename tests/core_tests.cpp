@@ -3,6 +3,7 @@
 #include "core/library/sound_library.hpp"
 #include "core/audio/audio_decoder.hpp"
 #include "core/audio/audio_engine.hpp"
+#include "core/audio/spsc_audio_ring.hpp"
 #include "core/soundboard/playback_policy.hpp"
 #include "core/library/sound_cache.hpp"
 #include "core/soundboard/soundboard_service.hpp"
@@ -11,6 +12,7 @@
 #include "core/soundboard/full_keyboard_mode.hpp"
 
 #include <cassert>
+#include <array>
 #include <vector>
 #include <filesystem>
 #include <fstream>
@@ -60,6 +62,15 @@ private:
 
 int main() {
     using namespace puffy;
+
+    audio::SpscAudioRing ring(6);
+    const std::array<const float, 4> ringInput{1.0F, 2.0F, 3.0F, 4.0F};
+    std::array<float, 3> ringFirst{};
+    std::array<float, 3> ringSecond{};
+    assert(ring.write(ringInput));
+    assert(ring.read(ringFirst) == 3 && ringFirst[0] == 1.0F && ringFirst[2] == 3.0F);
+    assert(ring.write(std::array<const float, 3>{5.0F, 6.0F, 7.0F}));
+    assert(ring.read(ringSecond) == 3 && ringSecond[0] == 4.0F && ringSecond[2] == 6.0F);
     soundboard::FullKeyboardModeController mode;
     mode.setEnabled(true);
     mode.setMode(soundboard::FullKeyboardMode::Sequential);
@@ -85,6 +96,7 @@ int main() {
     mixer.addVoice({samples, 2, 2}, 1.0F, audio::OutputRoute::VirtualMicrophone);
     mixer.process({}, monitor, virtualMic, 2, 2);
     assert(virtualMic[0] == 0.98F && monitor[0] == 0.0F);
+    assert(mixer.levels().soundboard > 0.9F && mixer.levels().virtualOutput > 0.9F);
     mixer.setMasterCeiling(0.5F);
     mixer.clearVoices();
     mixer.addVoice({samples, 2, 2}, 2.0F, audio::OutputRoute::VirtualMicrophone);
@@ -131,8 +143,11 @@ int main() {
     assert(engine.start(capture, output, &virtualMicrophone));
     std::vector<float> microphoneSamples{0.25F, 0.5F, 0.25F, 0.5F};
     capture.emit(microphoneSamples, 2, 2);
-    assert(output.lastFrames == 2 && output.last[0] == 0.25F);
+    assert(output.lastFrames == 2 && output.last[0] == 0.0F);
     assert(virtualMicrophone.receivedFrames == 2 && virtualMicrophone.received[1] == 0.5F);
+    engine.setMonitorMicrophone(true);
+    capture.emit(microphoneSamples, 2, 2);
+    assert(output.last[0] == 0.25F);
     engine.setMonitoringMuted(true);
     capture.emit(microphoneSamples, 2, 2);
     assert(output.last[0] == 0.25F);
@@ -150,7 +165,7 @@ int main() {
     assert(soundEngine.start(soundCapture, soundOutput, &soundVirtual));
     assert(soundEngine.playSound(99, audio::OutputRoute::VirtualMicrophone));
     soundCapture.emit(microphoneSamples, 2, 2);
-    assert(soundOutput.last[0] == 0.25F);
+    assert(soundOutput.last[0] == 0.0F);
     assert(soundVirtual.received[0] == 0.98F && soundVirtual.received[1] == 0.98F);
     assert(soundEngine.stopSound(99));
     soundEngine.stop();
@@ -200,6 +215,8 @@ int main() {
     audio::AudioEngine serviceEngine({{48000, 2}, 16, 8, {16, 2, 2}});
     soundboard::SoundboardService service(serviceLibrary, cache, cacheDecoder, serviceEngine);
     assert(service.prepareSound(serviceSound.id));
+    const auto waveform = service.waveform(serviceSound.id, 16);
+    assert(waveform.size() == 16 && waveform.back() > waveform.front());
     assert(service.trigger(serviceSound.id, true));
     assert(service.trigger(serviceSound.id, true));
     service.stopAll();
