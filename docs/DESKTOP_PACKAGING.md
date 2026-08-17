@@ -35,8 +35,13 @@ and set both `PUFFY_WINDOWS_CERTIFICATE_THUMBPRINT` and
 `PUFFY_WINDOWS_TIMESTAMP_URL` before invoking the same build command. See
 `docs/guides/SIGN_WINDOWS.md`.
 
-The virtual microphone driver remains a separate WDK package. Installing or
-updating that driver is the only operation that may request elevation.
+Local/CI desktop builds keep the unsigned virtual microphone driver separate.
+For a production release, pass a Microsoft-signed driver package to
+`scripts\build-windows.ps1 -SignedDriverDirectory ...`; the wrapper verifies
+the SYS/INF against the exact signed catalog with SignTool, bundles the payload,
+and switches NSIS to a per-machine install so its driver hook can create/update
+the virtual device. Driver installation/removal is the operation that requires
+elevation.
 
 ## macOS
 

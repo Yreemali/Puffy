@@ -1,62 +1,109 @@
 # Installing Puffy on Windows 10/11
 
-Puffy uses WebView2 for its interface and WASAPI/MMDevice for audio. The normal
-application runs without administrator privileges.
+Puffy uses WebView2 for its interface and WASAPI/MMDevice for application audio.
+The normal desktop process runs without administrator privileges. Installing a
+kernel audio driver is the one part that requires elevation.
 
 ## Install a release build
 
-1. Download the signed `Puffy_*_x64-setup.exe` from the project release.
-2. Verify its Authenticode signature in file Properties → Digital Signatures.
-3. Run the NSIS installer and launch Puffy from the Start menu.
-4. Allow microphone access when Windows asks.
+A complete release consists of two independently signed parts:
 
-Current CI artifacts are unsigned development builds. Do not treat a
-SmartScreen override as signature verification.
+1. the Puffy desktop/NSIS application package;
+2. the Puffy Virtual Audio kernel-driver package.
+
+For a production release, verify the publisher/signature of both packages
+before installation.
 
 ## Build locally
 
 Install:
 
-- Visual Studio 2022 Build Tools with **Desktop development with C++**;
-- Windows 10/11 SDK;
+- Visual Studio 2022 with **Desktop development with C++**;
+- a modern Windows 10/11 SDK;
+- Windows Driver Kit (WDK) with ACX 1.1 / KMDF 1.31 for the virtual microphone;
 - CMake, Rust stable, Node.js 22 and vcpkg;
 - WebView2 Runtime when it is not already present.
 
-From an MSVC developer PowerShell:
+From the repository root:
 
 ```powershell
-vcpkg install sqlite3:x64-windows-static libsndfile:x64-windows-static
-$env:VCPKG_ROOT = "C:\path\to\vcpkg"
-Set-Location ui\web
-npm ci
-npm run tauri:build -- --bundles nsis
+.\scripts\build-windows.ps1 -Clean
 ```
 
-The wrapper builds `puffy_native.dll`, stages it beside `Puffy.exe`, and creates
-the installer under `src-tauri\target\release\bundle\nsis`.
+This builds the virtual microphone driver, installs the x64 static vcpkg
+libraries, builds/tests the C++ core, builds the Tauri/NSIS package, and checks
+that all expected artifacts exist.
 
-## Virtual microphone
-
-The desktop installer alone cannot create a Windows capture endpoint. A release
-must include the separately built and Microsoft-signed virtual-audio driver.
-Only its install/update/remove helper may request elevation.
-
-For a production driver package, from an elevated terminal and only after
-verifying its signature:
+Use these switches only when needed:
 
 ```powershell
-pnputil /add-driver .\PuffyVirtualAudio.inf /install
+# Skip C++ tests
+.\scripts\build-windows.ps1 -SkipTests
+
+# Build only the desktop app when WDK/driver output is intentionally not needed
+.\scripts\build-windows.ps1 -SkipDriver
 ```
 
-Test-signed drivers belong on disposable test machines, not user systems.
+The desktop installer is created under:
+
+```text
+ui\web\src-tauri\target\release\bundle\nsis
+```
+
+The driver development package is created under:
+
+```text
+drivers\windows_virtual_audio\build\x64\Release
+```
+
+## Build only the virtual microphone
+
+```powershell
+cd drivers\windows_virtual_audio
+.\build-driver.ps1 -Configuration Release -Clean
+```
+
+Expected files:
+
+```text
+PuffyVirtualAudio.sys
+PuffyVirtualAudio.inf
+PuffyVirtualAudio.cat
+PuffyVirtualAudioDevice.exe
+```
+
+The driver exposes:
+
+- `Puffy Virtual Microphone Transport` as the private render sink used by Puffy;
+- `Puffy Virtual Microphone` as the recording endpoint selected by other apps.
+
+The transport format is float32 / 48 kHz / stereo, matching
+`virtual_audio\virtual_device_contract.hpp`.
+
+## Install the virtual microphone
+
+A generated CAT file is not, by itself, a production signature. On a normally
+configured end-user machine, install only a package whose catalog has a valid
+trusted signature.
+
+After signing/trusting the development or production package, open PowerShell as
+Administrator:
+
+```powershell
+cd drivers\windows_virtual_audio
+.\install-driver.ps1 -Configuration Release
+```
+
+The PowerShell helper validates the package and its catalog signature. It then
+uses the bundled `PuffyVirtualAudioDevice.exe` SetupAPI/NewDev helper to create
+`ROOT\PuffyVirtualAudio` when needed and bind the INF. It deliberately does not
+enable test-signing, disable Secure Boot, or change boot policy.
+
+Restart Puffy plus any already-running audio client after installation. In a
+recording application's microphone list, select `Puffy Virtual Microphone`, not
+the `Transport` endpoint.
 
 ## Application data
 
-Puffy stores its database under `%LOCALAPPDATA%\Puffy`. Uninstalling the app does
-not silently delete the user's library metadata.
-
-## References
-
-- [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/)
-- [Tauri Windows installers](https://v2.tauri.app/distribute/windows-installer/)
-- [Microsoft PnPUtil driver installation](https://learn.microsoft.com/windows-hardware/drivers/install/test-signing)
+Puffy stores its database under `%LOCALAPPDATA%\Puffy`. Uninstalling the desktop
+application does not silently delete the user's library metadata.

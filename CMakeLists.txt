@@ -4,8 +4,15 @@ project(puffy VERSION 0.2.0 LANGUAGES CXX)
 include(GNUInstallDirs)
 
 option(PUFFY_BUILD_TESTS "Build puffy unit tests" ON)
+option(PUFFY_REQUIRE_SNDFILE "Fail configuration when libsndfile is unavailable" OFF)
 
 find_package(SQLite3 REQUIRED)
+# CMake < 4.3 exposes the imported SQLite target as SQLite::SQLite3 while
+# newer releases provide SQLite3::SQLite3. Keep the declared CMake 3.21
+# minimum working instead of accidentally requiring a much newer CMake.
+if(NOT TARGET SQLite3::SQLite3 AND TARGET SQLite::SQLite3)
+    add_library(SQLite3::SQLite3 ALIAS SQLite::SQLite3)
+endif()
 
 # Prefer the official CMake package (vcpkg and recent libsndfile installs),
 # then fall back to pkg-config on Unix-like systems. The decoder API remains
@@ -48,6 +55,9 @@ elseif(UNIX)
         target_link_libraries(puffy_core PRIVATE PkgConfig::SNDFILE)
         target_compile_definitions(puffy_core PUBLIC PUFFY_HAS_SNDFILE=1)
     endif()
+endif()
+if(PUFFY_REQUIRE_SNDFILE AND NOT TARGET SndFile::sndfile AND NOT SNDFILE_FOUND)
+    message(FATAL_ERROR "PUFFY_REQUIRE_SNDFILE=ON but libsndfile was not found. Install libsndfile (vcpkg package: libsndfile) and reconfigure.")
 endif()
 
 add_library(puffy_native SHARED native/puffy_native.cpp)

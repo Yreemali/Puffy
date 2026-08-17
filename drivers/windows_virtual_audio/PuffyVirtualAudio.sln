@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PuffyVirtualAudio", "PuffyVirtualAudio.vcxproj", "{7D82F490-9AD7-4F25-A9B3-DC744FAAE94C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PuffyVirtualAudioDevice", "PuffyVirtualAudioDevice.vcxproj", "{52C2FE2C-4F78-445D-9511-AE5EAA32E5A1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7D82F490-9AD7-4F25-A9B3-DC744FAAE94C}.Debug|x64.ActiveCfg = Debug|x64
+		{7D82F490-9AD7-4F25-A9B3-DC744FAAE94C}.Debug|x64.Build.0 = Debug|x64
+		{7D82F490-9AD7-4F25-A9B3-DC744FAAE94C}.Release|x64.ActiveCfg = Release|x64
+		{7D82F490-9AD7-4F25-A9B3-DC744FAAE94C}.Release|x64.Build.0 = Release|x64
+		{52C2FE2C-4F78-445D-9511-AE5EAA32E5A1}.Debug|x64.ActiveCfg = Debug|x64
+		{52C2FE2C-4F78-445D-9511-AE5EAA32E5A1}.Debug|x64.Build.0 = Debug|x64
+		{52C2FE2C-4F78-445D-9511-AE5EAA32E5A1}.Release|x64.ActiveCfg = Release|x64
+		{52C2FE2C-4F78-445D-9511-AE5EAA32E5A1}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+EndGlobal

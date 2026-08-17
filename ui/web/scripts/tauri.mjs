@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import process from 'node:process'
 
@@ -25,16 +25,28 @@ function filesBelow(directory) {
 }
 
 function newestMatch(pattern) {
-  const matches = filesBelow(buildDir).filter(path => pattern.test(basename(path)) && !path.includes(`${join('CMakeFiles', '')}`))
+  const matches = filesBelow(buildDir)
+    .filter(path => pattern.test(basename(path)) && !path.includes(`${join('CMakeFiles', '')}`))
+    .sort((left, right) => {
+      const leftRelease = left.toLowerCase().includes(`${join('release', '').toLowerCase()}`) ? 1 : 0
+      const rightRelease = right.toLowerCase().includes(`${join('release', '').toLowerCase()}`) ? 1 : 0
+      if (leftRelease !== rightRelease) return rightRelease - leftRelease
+      return statSync(right).mtimeMs - statSync(left).mtimeMs
+    })
   if (!matches.length) throw new Error(`Native build did not produce ${pattern}`)
   return matches[0]
 }
 
 function configureNative() {
-  const args = ['-S', projectRoot, '-B', buildDir, '-DPUFFY_BUILD_TESTS=OFF', '-DCMAKE_BUILD_TYPE=Release']
+  const args = ['-S', projectRoot, '-B', buildDir, '-DPUFFY_BUILD_TESTS=OFF', '-DPUFFY_REQUIRE_SNDFILE=ON', '-DCMAKE_BUILD_TYPE=Release']
   const vcpkgRoot = process.env.VCPKG_ROOT || process.env.VCPKG_INSTALLATION_ROOT
-  if (platform === 'win32' && vcpkgRoot) {
-    args.push(`-DCMAKE_TOOLCHAIN_FILE=${join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake')}`)
+  if (platform === 'win32') {
+    if (!vcpkgRoot) {
+      throw new Error('Windows builds require VCPKG_ROOT (or VCPKG_INSTALLATION_ROOT). Run scripts\\build-windows.ps1 or set the variable to your vcpkg checkout.')
+    }
+    const toolchain = join(vcpkgRoot, 'scripts', 'buildsystems', 'vcpkg.cmake')
+    if (!existsSync(toolchain)) throw new Error(`Invalid vcpkg root: ${vcpkgRoot}`)
+    args.push(`-DCMAKE_TOOLCHAIN_FILE=${toolchain}`)
     args.push(`-DVCPKG_TARGET_TRIPLET=${process.env.VCPKG_TARGET_TRIPLET || 'x64-windows-static'}`)
   }
   run('cmake', args)
@@ -88,13 +100,35 @@ function stageNative() {
     if ((certificateThumbprint && !timestampUrl) || (!certificateThumbprint && timestampUrl)) {
       throw new Error('Set both PUFFY_WINDOWS_CERTIFICATE_THUMBPRINT and PUFFY_WINDOWS_TIMESTAMP_URL for signed builds')
     }
-    const windows = { bundleVCRuntime: true, webviewInstallMode: { type: 'downloadBootstrapper' } }
+    const resources = { 'native/puffy_native.dll': 'puffy_native.dll' }
+    const windows = {
+      allowDowngrades: false,
+      bundleVCRuntime: true,
+      webviewInstallMode: { type: 'downloadBootstrapper', silent: true },
+    }
+
+    const signedDriverDirectory = process.env.PUFFY_SIGNED_DRIVER_DIR
+    if (signedDriverDirectory) {
+      const driverStage = join(nativeStage, 'driver')
+      mkdirSync(driverStage, { recursive: true })
+      for (const name of ['PuffyVirtualAudio.sys', 'PuffyVirtualAudio.inf', 'PuffyVirtualAudio.cat', 'PuffyVirtualAudioDevice.exe']) {
+        const source = join(signedDriverDirectory, name)
+        if (!existsSync(source)) throw new Error(`Signed driver package is missing ${source}`)
+        cpSync(source, join(driverStage, name))
+        resources[`native/driver/${name}`] = `driver/${name}`
+      }
+      windows.nsis = {
+        installMode: 'perMachine',
+        installerHooks: './windows/driver-hooks.nsh',
+      }
+    }
+
     if (certificateThumbprint) {
       windows.certificateThumbprint = certificateThumbprint
       windows.digestAlgorithm = 'sha256'
       windows.timestampUrl = timestampUrl
     }
-    return { resources: { 'native/puffy_native.dll': 'puffy_native.dll' }, windows }
+    return { resources, windows }
   }
   if (platform === 'darwin') {
     const libraries = macDependencies(newestMatch(/^libpuffy_native\.dylib$/))

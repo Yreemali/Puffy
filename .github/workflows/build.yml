@@ -30,6 +30,8 @@ jobs:
           cache: npm
           cache-dependency-path: ui/web/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
+      - name: Validate virtual microphone source
+        run: python scripts/check-windows-driver-source.py
       - name: Install native dependencies
         run: vcpkg install sqlite3:x64-windows-static libsndfile:x64-windows-static
       - name: Configure
@@ -46,6 +48,9 @@ jobs:
         env:
           VCPKG_TARGET_TRIPLET: x64-windows-static
         run: npm run tauri:build -- --bundles nsis
+      - name: Validate packaged Windows runtime
+        shell: pwsh
+        run: ./scripts/check-windows-package.ps1 -ReleaseDir ./ui/web/src-tauri/target/release
       - uses: actions/upload-artifact@v4
         with:
           name: Puffy-windows-unsigned
